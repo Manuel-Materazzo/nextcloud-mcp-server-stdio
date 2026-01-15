@@ -67,7 +67,7 @@ http://127.0.0.1:8000/mcp
 - **Document Processing** - OCR and text extraction from PDFs, DOCX, images with progress notifications
 - **Flexible Deployment** - Docker, Kubernetes (Helm), VM, or local installation
 - **Production-Ready Auth** - Basic Auth with app passwords (recommended) or OAuth2/OIDC (experimental)
-- **Multiple Transports** - SSE, HTTP, and streamable-http support
+- **Multiple Transports** - stdio (subprocess), streamable-http (HTTP), http, and SSE support
 
 ## Supported Apps
 

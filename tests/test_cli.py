@@ -285,3 +285,99 @@ def test_oauth_token_type_case_normalization(runner, clean_env, monkeypatch):
     captured_env.clear()
     runner.invoke(run, ["--oauth-token-type", "Bearer"])
     assert captured_env["NEXTCLOUD_OIDC_TOKEN_TYPE"] in ["Bearer", "bearer"]
+
+
+def test_stdio_transport_option(runner):
+    """Test that stdio transport is available as a CLI option."""
+    result = runner.invoke(run, ["--help"])
+    assert result.exit_code == 0
+    assert "stdio" in result.output
+    assert "--transport" in result.output
+
+
+def test_transport_accepts_valid_values(runner, clean_env):
+    """Test that --transport accepts valid values: streamable-http, http, stdio."""
+    # Test streamable-http (default)
+    result = runner.invoke(run, ["--transport", "streamable-http", "--help"])
+    assert result.exit_code == 0
+
+    # Test http
+    result = runner.invoke(run, ["--transport", "http", "--help"])
+    assert result.exit_code == 0
+
+    # Test stdio
+    result = runner.invoke(run, ["--transport", "stdio", "--help"])
+    assert result.exit_code == 0
+
+
+def test_transport_rejects_invalid_values(runner, clean_env):
+    """Test that --transport rejects invalid values."""
+    result = runner.invoke(run, ["--transport", "invalid"])
+    assert result.exit_code != 0
+    assert "Invalid value" in result.output
+
+
+def test_stdio_transport_skips_uvicorn(runner, clean_env, monkeypatch):
+    """Test that stdio transport doesn't call uvicorn but calls mcp.run() instead."""
+    monkeypatch.setenv("NEXTCLOUD_HOST", "https://test.example.com")
+    monkeypatch.setenv("NEXTCLOUD_USERNAME", "testuser")
+    monkeypatch.setenv("NEXTCLOUD_PASSWORD", "testpass")
+
+    uvicorn_called = {"called": False}
+    mcp_run_called = {"called": False, "transport": None}
+
+    def mock_get_app(transport, enabled_apps):
+        class MockMCP:
+            def run(self, transport):
+                mcp_run_called["called"] = True
+                mcp_run_called["transport"] = transport
+                # Exit early to prevent actual server startup
+                raise SystemExit(0)
+
+        return (None if transport == "stdio" else object(), MockMCP())
+
+    def mock_uvicorn_run(*args, **kwargs):
+        uvicorn_called["called"] = True
+        raise SystemExit(0)
+
+    monkeypatch.setattr("nextcloud_mcp_server.cli.get_app", mock_get_app)
+    monkeypatch.setattr("nextcloud_mcp_server.cli.uvicorn.run", mock_uvicorn_run)
+
+    # Run with stdio transport
+    _ = runner.invoke(run, ["--transport", "stdio"])
+
+    # Should call mcp.run() with stdio, not uvicorn
+    assert mcp_run_called["called"]
+    assert mcp_run_called["transport"] == "stdio"
+    assert not uvicorn_called["called"]
+
+
+def test_http_transport_uses_uvicorn(runner, clean_env, monkeypatch):
+    """Test that HTTP transports use uvicorn."""
+    monkeypatch.setenv("NEXTCLOUD_HOST", "https://test.example.com")
+    monkeypatch.setenv("NEXTCLOUD_USERNAME", "testuser")
+    monkeypatch.setenv("NEXTCLOUD_PASSWORD", "testpass")
+
+    uvicorn_called = {"called": False}
+    mcp_run_called = {"called": False}
+
+    def mock_get_app(transport, enabled_apps):
+        class MockMCP:
+            def run(self, transport):
+                mcp_run_called["called"] = True
+
+        return (object(), MockMCP())
+
+    def mock_uvicorn_run(*args, **kwargs):
+        uvicorn_called["called"] = True
+        raise SystemExit(0)
+
+    monkeypatch.setattr("nextcloud_mcp_server.cli.get_app", mock_get_app)
+    monkeypatch.setattr("nextcloud_mcp_server.cli.uvicorn.run", mock_uvicorn_run)
+
+    # Run with streamable-http transport
+    _ = runner.invoke(run, ["--transport", "streamable-http"])
+
+    # Should call uvicorn, not mcp.run()
+    assert uvicorn_called["called"]
+    assert not mcp_run_called["called"]
