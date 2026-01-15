@@ -31,7 +31,7 @@ from .app import get_app
     "-t",
     default="streamable-http",
     show_default=True,
-    type=click.Choice(["streamable-http", "http"]),
+    type=click.Choice(["streamable-http", "http", "stdio"]),
     help="MCP transport protocol",
 )
 @click.option(
@@ -234,7 +234,17 @@ def run(
 
     enabled_apps = list(enable_app) if enable_app else None
 
-    app = get_app(transport=transport, enabled_apps=enabled_apps)
+    app, mcp = get_app(transport=transport, enabled_apps=enabled_apps)
+
+    # Handle stdio transport separately (no uvicorn needed)
+    if transport == "stdio":
+        # For stdio transport, run the MCP server directly
+        mcp.run(transport="stdio")
+        return
+
+    # For HTTP transports, use uvicorn
+    # Type checker note: app cannot be None here because get_app() only returns None for stdio transport
+    assert app is not None, "HTTP transport requires Starlette app"
 
     # Get observability settings and create uvicorn logging config
     settings = get_settings()
@@ -244,8 +254,9 @@ def run(
         include_trace_context=settings.log_include_trace_context,
     )
 
+    # Type ignore: app is an ASGI app but wrapped in middleware, type checker sees object
     uvicorn.run(
-        app=app,
+        app=app,  # type: ignore[arg-type]
         host=host,
         port=port,
         log_level=log_level,

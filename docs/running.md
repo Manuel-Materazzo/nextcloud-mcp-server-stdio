@@ -142,24 +142,37 @@ docker run -p 127.0.0.1:8080:8000 --env-file .env --rm \
 The server supports multiple MCP transport protocols:
 
 ```bash
-# Streamable HTTP (default, recommended)
+# Streamable HTTP (default, recommended for network access)
 docker run -p 127.0.0.1:8000:8000 --env-file .env --rm \
   ghcr.io/cbcoutinho/nextcloud-mcp-server:latest --oauth \
   --transport streamable-http
-
-# SSE - Server-Sent Events (deprecated)
-docker run -p 127.0.0.1:8000:8000 --env-file .env --rm \
-  ghcr.io/cbcoutinho/nextcloud-mcp-server:latest --oauth \
-  --transport sse
 
 # HTTP
 docker run -p 127.0.0.1:8000:8000 --env-file .env --rm \
   ghcr.io/cbcoutinho/nextcloud-mcp-server:latest --oauth \
   --transport http
+
+# Stdio (for local/subprocess usage)
+# Stdio communicates via stdin/stdout and doesn't require network ports
+nextcloud-mcp-server run --transport stdio
+
+# SSE - Server-Sent Events (deprecated)
+docker run -p 127.0.0.1:8000:8000 --env-file .env --rm \
+  ghcr.io/cbcoutinho/nextcloud-mcp-server:latest --oauth \
+  --transport sse
 ```
+
+**Transport Guide:**
+- **streamable-http**: Network-based transport, recommended for remote clients and HTTP-based MCP clients
+- **http**: Alternative HTTP-based transport
+- **stdio**: Local transport using stdin/stdout, ideal for subprocess spawning and local development (no network port needed)
+- **sse**: Deprecated, use streamable-http instead
 
 > [!WARNING]
 > SSE transport is deprecated and will be removed in a future version of the MCP spec. Please migrate to `streamable-http`.
+
+> [!NOTE]
+> Stdio transport does not require Docker or network ports. It's designed for MCP clients that spawn the server as a subprocess and communicate via stdin/stdout (like many IDE integrations and local MCP clients).
 
 ### Logging
 

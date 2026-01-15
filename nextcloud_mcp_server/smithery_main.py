@@ -39,7 +39,7 @@ def main():
     from nextcloud_mcp_server.app import get_app
 
     # Create the app with streamable-http transport (required for Smithery)
-    app = get_app(transport="streamable-http")
+    app, _ = get_app(transport="streamable-http")
 
     # Smithery sets PORT environment variable
     port = int(os.environ.get("PORT", 8081))
@@ -47,7 +47,7 @@ def main():
     logger.info(f"Listening on port {port}")
 
     uvicorn.run(
-        app,
+        app,  # type: ignore[arg-type]
         host="0.0.0.0",
         port=port,
         log_level="info",

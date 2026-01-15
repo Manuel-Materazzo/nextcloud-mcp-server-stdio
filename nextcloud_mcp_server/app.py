@@ -1105,7 +1105,15 @@ async def setup_oauth_config_for_multi_user_basic(
     return (token_verifier, refresh_token_storage, client_id, client_secret)
 
 
-def get_app(transport: str = "streamable-http", enabled_apps: list[str] | None = None):
+def get_app(
+    transport: str = "streamable-http", enabled_apps: list[str] | None = None
+) -> tuple[object | None, FastMCP]:
+    """Get the application and MCP server instance.
+
+    Returns:
+        tuple[Starlette/ASGI app, FastMCP instance] for HTTP transports
+        tuple[None, FastMCP instance] for stdio transport
+    """
     # Initialize observability (logging will be configured by uvicorn)
     settings = get_settings()
 
@@ -1484,6 +1492,12 @@ def get_app(transport: str = "streamable-http", enabled_apps: list[str] | None =
         logger.info(
             "Dynamic tool filtering enabled for OAuth mode (JWT and Bearer tokens)"
         )
+
+    # For stdio transport, return early without creating HTTP app
+    # stdio transport doesn't need Starlette routes (health checks, OAuth, management API)
+    if transport == "stdio":
+        logger.info("Stdio transport detected - skipping HTTP app creation")
+        return (None, mcp)
 
     mcp_app = mcp.streamable_http_app()
 
@@ -2589,4 +2603,4 @@ def get_app(transport: str = "streamable-http", enabled_apps: list[str] | None =
             "BasicAuthMiddleware enabled - multi-user BasicAuth pass-through mode active"
         )
 
-    return app
+    return (app, mcp)
