@@ -1,5 +1,10 @@
 """Test Astrolabe integration with multiple MCP server deployments.
 
+Cross-system interface test: Tests the MCP server's integration with the
+Astrolabe Nextcloud app, which is installed from the Nextcloud app store via
+app-hooks/post-installation/20-install-astrolabe-app.sh. Astrolabe source
+lives in a separate repository (https://github.com/cbcoutinho/astrolabe).
+
 This test suite verifies that the Astrolabe app can be dynamically configured
 to connect to different MCP server deployments (mcp-oauth, mcp-keycloak, etc.).
 

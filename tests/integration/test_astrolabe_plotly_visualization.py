@@ -1,5 +1,10 @@
 """Integration test for Astrolabe Plotly 3D visualization with multi-user BasicAuth mode.
 
+Cross-system interface test: Tests the MCP server's integration with the
+Astrolabe Nextcloud app, which is installed from the Nextcloud app store via
+app-hooks/post-installation/20-install-astrolabe-app.sh. Astrolabe source
+lives in a separate repository (https://github.com/cbcoutinho/astrolabe).
+
 This test verifies that:
 1. User can provision background sync access via app password
 2. Content created via MCP tools is indexed by vector sync

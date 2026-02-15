@@ -1,5 +1,10 @@
 """Integration test for multi-user Astrolabe background sync enablement.
 
+Cross-system interface test: Tests the MCP server's integration with the
+Astrolabe Nextcloud app, which is installed from the Nextcloud app store via
+app-hooks/post-installation/20-install-astrolabe-app.sh. Astrolabe source
+lives in a separate repository (https://github.com/cbcoutinho/astrolabe).
+
 This test verifies that multiple users can independently:
 1. Log in to Nextcloud
 2. Generate an app password in Security settings

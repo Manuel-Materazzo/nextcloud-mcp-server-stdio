@@ -1,5 +1,10 @@
 """Integration tests for Astrolabe token refresh flow.
 
+Cross-system interface test: Tests the MCP server's integration with the
+Astrolabe Nextcloud app, which is installed from the Nextcloud app store via
+app-hooks/post-installation/20-install-astrolabe-app.sh. Astrolabe source
+lives in a separate repository (https://github.com/cbcoutinho/astrolabe).
+
 Tests the token refresh mechanism between Astrolabe (Nextcloud app)
 and the MCP server backend in a multi-user basic auth deployment.
 
