@@ -11,7 +11,6 @@ import secrets
 from typing import Optional
 from urllib.parse import urlencode
 
-import httpx
 import jwt
 from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.auth.provider import AccessToken
@@ -23,6 +22,8 @@ from nextcloud_mcp_server.auth import require_scopes
 from nextcloud_mcp_server.auth.storage import RefreshTokenStorage
 from nextcloud_mcp_server.auth.token_broker import TokenBrokerService
 from nextcloud_mcp_server.auth.userinfo_routes import _query_idp_userinfo
+
+from ..http import nextcloud_httpx_client
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +70,7 @@ async def extract_user_id_from_token(ctx: Context) -> str:
             "OIDC_DISCOVERY_URI",
             "http://localhost:8080/.well-known/openid-configuration",
         )
-        async with httpx.AsyncClient() as http_client:
+        async with nextcloud_httpx_client() as http_client:
             discovery_response = await http_client.get(oidc_discovery_uri)
             discovery_response.raise_for_status()
             discovery = discovery_response.json()

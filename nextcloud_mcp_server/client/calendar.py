@@ -13,6 +13,8 @@ from icalendar import Alarm, Calendar, vRecur
 from icalendar import Event as ICalEvent
 from icalendar import Todo as ICalTodo
 
+from ..config import get_nextcloud_ssl_verify
+
 logger = logging.getLogger(__name__)
 
 
@@ -34,6 +36,7 @@ class CalendarClient:
             url=f"{base_url}/remote.php/dav/",
             username=username,
             auth=auth,
+            ssl_verify_cert=get_nextcloud_ssl_verify(),
         )
         self._calendar_home_url = f"{base_url}/remote.php/dav/calendars/{username}/"
 

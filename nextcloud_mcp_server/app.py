@@ -58,6 +58,7 @@ from nextcloud_mcp_server.config_validators import (
 )
 from nextcloud_mcp_server.context import get_client as get_nextcloud_client
 from nextcloud_mcp_server.document_processors import get_registry
+from nextcloud_mcp_server.http import nextcloud_httpx_client
 from nextcloud_mcp_server.observability import (
     ObservabilityMiddleware,
     setup_metrics,
@@ -690,7 +691,7 @@ async def setup_oauth_config():
     logger.info(f"Performing OIDC discovery: {discovery_url}")
 
     # Perform OIDC discovery
-    async with httpx.AsyncClient(follow_redirects=True) as client:
+    async with nextcloud_httpx_client(follow_redirects=True) as client:
         response = await client.get(discovery_url)
         response.raise_for_status()
         discovery = response.json()
@@ -994,7 +995,7 @@ async def setup_oauth_config_for_multi_user_basic(
 
     # Perform OIDC discovery
     try:
-        async with httpx.AsyncClient(
+        async with nextcloud_httpx_client(
             timeout=30.0, follow_redirects=True
         ) as http_client:
             response = await http_client.get(discovery_url)
@@ -1975,7 +1976,7 @@ def get_app(transport: str = "streamable-http", enabled_apps: list[str] | None =
             # Try to connect to Nextcloud
             start_time = time.time()
             try:
-                async with httpx.AsyncClient(timeout=2.0) as client:
+                async with nextcloud_httpx_client(timeout=2.0) as client:
                     response = await client.get(f"{nextcloud_host}/status.php")
                     duration = time.time() - start_time
                     if response.status_code == 200:

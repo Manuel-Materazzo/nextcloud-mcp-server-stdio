@@ -9,7 +9,7 @@ import logging
 import time
 from typing import Optional
 
-import httpx
+from ..http import nextcloud_httpx_client
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +60,7 @@ class AstrolabeClient:
         # Discover token endpoint
         discovery_url = f"{self.nextcloud_host}/.well-known/openid-configuration"
 
-        async with httpx.AsyncClient() as client:
+        async with nextcloud_httpx_client() as client:
             logger.debug(f"Discovering token endpoint from {discovery_url}")
             discovery_resp = await client.get(discovery_url)
             discovery_resp.raise_for_status()
@@ -107,7 +107,7 @@ class AstrolabeClient:
         token = await self.get_access_token()
         url = f"{self.nextcloud_host}/apps/astrolabe/api/v1/background-sync/credentials/{user_id}"
 
-        async with httpx.AsyncClient() as client:
+        async with nextcloud_httpx_client() as client:
             logger.debug(f"Retrieving app password for user: {user_id}")
 
             response = await client.get(

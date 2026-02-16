@@ -20,6 +20,8 @@ from nextcloud_mcp_server.server.webhook_presets import (
     get_preset,
 )
 
+from ..http import nextcloud_httpx_client
+
 logger = logging.getLogger(__name__)
 
 
@@ -140,7 +142,7 @@ async def _get_authenticated_client(request: Request) -> httpx.AsyncClient:
 
         assert nextcloud_host is not None  # Type narrowing for type checker
         assert username is not None and password is not None  # Type narrowing
-        return httpx.AsyncClient(
+        return nextcloud_httpx_client(
             base_url=nextcloud_host,
             auth=(username, password),
             timeout=30.0,
@@ -163,7 +165,7 @@ async def _get_authenticated_client(request: Request) -> httpx.AsyncClient:
     if not nextcloud_host:
         raise RuntimeError("Nextcloud host not configured")
 
-    return httpx.AsyncClient(
+    return nextcloud_httpx_client(
         base_url=nextcloud_host,
         headers={"Authorization": f"Bearer {access_token}"},
         timeout=30.0,

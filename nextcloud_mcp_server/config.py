@@ -181,6 +181,10 @@ class Settings:
     nextcloud_username: Optional[str] = None
     nextcloud_password: Optional[str] = None
 
+    # Nextcloud SSL/TLS settings
+    nextcloud_verify_ssl: bool = True
+    nextcloud_ca_bundle: Optional[str] = None
+
     # ADR-005: Token Audience Validation (required for OAuth mode)
     nextcloud_mcp_server_url: Optional[str] = None  # MCP server URL (used as audience)
     nextcloud_resource_uri: Optional[str] = None  # Nextcloud resource identifier
@@ -252,8 +256,24 @@ class Settings:
     log_include_trace_context: bool = True
 
     def __post_init__(self):
-        """Validate Qdrant configuration and set defaults."""
+        """Validate configuration and set defaults."""
         logger = logging.getLogger(__name__)
+
+        # Validate SSL/TLS configuration
+        if not self.nextcloud_verify_ssl:
+            logger.warning(
+                "NEXTCLOUD_VERIFY_SSL is disabled. "
+                "TLS certificate verification is turned off for all Nextcloud connections. "
+                "This is insecure and should only be used for development/testing."
+            )
+        if self.nextcloud_ca_bundle:
+            import os as _os
+
+            if not _os.path.isfile(self.nextcloud_ca_bundle):
+                raise ValueError(
+                    f"NEXTCLOUD_CA_BUNDLE path does not exist: {self.nextcloud_ca_bundle}"
+                )
+            logger.info("Using custom CA bundle: %s", self.nextcloud_ca_bundle)
 
         # Ensure mutual exclusivity
         if self.qdrant_url and self.qdrant_location:
@@ -504,6 +524,11 @@ def get_settings() -> Settings:
         nextcloud_host=os.getenv("NEXTCLOUD_HOST"),
         nextcloud_username=os.getenv("NEXTCLOUD_USERNAME"),
         nextcloud_password=os.getenv("NEXTCLOUD_PASSWORD"),
+        # Nextcloud SSL/TLS settings
+        nextcloud_verify_ssl=(
+            os.getenv("NEXTCLOUD_VERIFY_SSL", "true").lower() == "true"
+        ),
+        nextcloud_ca_bundle=os.getenv("NEXTCLOUD_CA_BUNDLE"),
         # ADR-005: Token Audience Validation
         nextcloud_mcp_server_url=os.getenv("NEXTCLOUD_MCP_SERVER_URL"),
         nextcloud_resource_uri=os.getenv("NEXTCLOUD_RESOURCE_URI"),
@@ -569,3 +594,19 @@ def get_settings() -> Settings:
         log_include_trace_context=os.getenv("LOG_INCLUDE_TRACE_CONTEXT", "true").lower()
         == "true",
     )
+
+
+def get_nextcloud_ssl_verify() -> bool | str:
+    """Return the SSL verification setting for Nextcloud connections.
+
+    Returns:
+        - False if NEXTCLOUD_VERIFY_SSL=false (disable verification)
+        - CA bundle path if NEXTCLOUD_CA_BUNDLE is set (custom CA)
+        - True otherwise (default system CA verification)
+    """
+    settings = get_settings()
+    if not settings.nextcloud_verify_ssl:
+        return False
+    if settings.nextcloud_ca_bundle:
+        return settings.nextcloud_ca_bundle
+    return True

@@ -20,6 +20,7 @@ import httpx
 import jwt
 
 from ..config import get_settings
+from ..http import nextcloud_httpx_client
 from .storage import RefreshTokenStorage
 
 logger = logging.getLogger(__name__)
@@ -68,7 +69,7 @@ class TokenExchangeService:
         self.storage: Optional[RefreshTokenStorage] = None
 
         # Create HTTP client
-        self.http_client = httpx.AsyncClient(
+        self.http_client = nextcloud_httpx_client(
             timeout=30.0,
             follow_redirects=True,
         )
