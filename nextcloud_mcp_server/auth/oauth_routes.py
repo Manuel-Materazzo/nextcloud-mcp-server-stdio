@@ -27,13 +27,14 @@ import time
 from base64 import urlsafe_b64encode
 from urllib.parse import urlencode
 
-import httpx
 import jwt
 from starlette.requests import Request
 from starlette.responses import JSONResponse, RedirectResponse
 
 from nextcloud_mcp_server.auth.client_registry import get_client_registry
 from nextcloud_mcp_server.auth.storage import RefreshTokenStorage
+
+from ..http import nextcloud_httpx_client
 
 logger = logging.getLogger(__name__)
 
@@ -218,7 +219,7 @@ async def oauth_authorize(request: Request) -> RedirectResponse | JSONResponse:
             )
 
         # Fetch authorization endpoint from discovery
-        async with httpx.AsyncClient() as http_client:
+        async with nextcloud_httpx_client() as http_client:
             response = await http_client.get(discovery_url)
             response.raise_for_status()
             discovery = response.json()
@@ -354,7 +355,7 @@ async def oauth_authorize_nextcloud(
             status_code=500,
         )
 
-    async with httpx.AsyncClient() as http_client:
+    async with nextcloud_httpx_client() as http_client:
         response = await http_client.get(discovery_url)
         response.raise_for_status()
         discovery = response.json()
@@ -462,7 +463,7 @@ async def oauth_callback_nextcloud(request: Request):
     callback_uri = f"{mcp_server_url}/oauth/callback"
 
     discovery_url = oauth_config.get("discovery_url")
-    async with httpx.AsyncClient() as http_client:
+    async with nextcloud_httpx_client() as http_client:
         response = await http_client.get(discovery_url)
         response.raise_for_status()
         discovery = response.json()
@@ -482,7 +483,7 @@ async def oauth_callback_nextcloud(request: Request):
         token_params["code_verifier"] = code_verifier
 
     # Exchange code for tokens
-    async with httpx.AsyncClient() as http_client:
+    async with nextcloud_httpx_client() as http_client:
         response = await http_client.post(
             token_endpoint,
             data=token_params,

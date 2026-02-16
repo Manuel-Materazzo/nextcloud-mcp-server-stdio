@@ -4,7 +4,6 @@ import os
 from httpx import (
     AsyncBaseTransport,
     AsyncClient,
-    AsyncHTTPTransport,
     Auth,
     BasicAuth,
     Request,
@@ -13,6 +12,7 @@ from httpx import (
 )
 
 from ..controllers.notes_search import NotesSearchController
+from ..http import nextcloud_httpx_transport
 from .calendar import CalendarClient
 from .contacts import ContactsClient
 from .cookbook import CookbookClient
@@ -67,7 +67,7 @@ class NextcloudClient:
         self._client = AsyncClient(
             base_url=base_url,
             auth=auth,
-            transport=AsyncDisableCookieTransport(AsyncHTTPTransport()),
+            transport=AsyncDisableCookieTransport(nextcloud_httpx_transport()),
             event_hooks={"request": [log_request], "response": [log_response]},
             timeout=Timeout(timeout=30, connect=5),
         )

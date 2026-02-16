@@ -10,7 +10,6 @@ All endpoints require OAuth bearer token authentication via UnifiedTokenVerifier
 
 import logging
 
-import httpx
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
@@ -19,6 +18,8 @@ from nextcloud_mcp_server.api.management import (
     extract_bearer_token,
     validate_token_and_get_user,
 )
+
+from ..http import nextcloud_httpx_client
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +58,7 @@ async def get_installed_apps(request: Request) -> JSONResponse:
             raise ValueError("Nextcloud host not configured")
 
         # Create authenticated HTTP client
-        async with httpx.AsyncClient(
+        async with nextcloud_httpx_client(
             base_url=nextcloud_host,
             headers={"Authorization": f"Bearer {token}"},
             timeout=30.0,
@@ -129,7 +130,7 @@ async def list_webhooks(request: Request) -> JSONResponse:
             raise ValueError("Nextcloud host not configured")
 
         # Create authenticated HTTP client
-        async with httpx.AsyncClient(
+        async with nextcloud_httpx_client(
             base_url=nextcloud_host,
             headers={"Authorization": f"Bearer {token}"},
             timeout=30.0,
@@ -210,7 +211,7 @@ async def create_webhook(request: Request) -> JSONResponse:
             raise ValueError("Nextcloud host not configured")
 
         # Create authenticated HTTP client
-        async with httpx.AsyncClient(
+        async with nextcloud_httpx_client(
             base_url=nextcloud_host,
             headers={"Authorization": f"Bearer {token}"},
             timeout=30.0,
@@ -286,7 +287,7 @@ async def delete_webhook(request: Request) -> JSONResponse:
             raise ValueError("Nextcloud host not configured")
 
         # Create authenticated HTTP client
-        async with httpx.AsyncClient(
+        async with nextcloud_httpx_client(
             base_url=nextcloud_host,
             headers={"Authorization": f"Bearer {token}"},
             timeout=30.0,

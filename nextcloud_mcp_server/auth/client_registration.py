@@ -10,6 +10,8 @@ import httpx
 
 from nextcloud_mcp_server.auth.storage import RefreshTokenStorage
 
+from ..http import nextcloud_httpx_client
+
 logger = logging.getLogger(__name__)
 
 
@@ -132,7 +134,7 @@ async def register_client(
     logger.info(f"Registering OAuth client with Nextcloud: {client_name}")
     logger.debug(f"Registration endpoint: {registration_endpoint}")
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    async with nextcloud_httpx_client(timeout=30.0) as client:
         try:
             response = await client.post(
                 registration_endpoint,
@@ -229,7 +231,7 @@ async def delete_client(
     logger.info(f"Deleting OAuth client: {client_id[:16]}...")
     logger.debug(f"Deletion endpoint: {deletion_endpoint}")
 
-    async with httpx.AsyncClient(timeout=30.0) as http_client:
+    async with nextcloud_httpx_client(timeout=30.0) as http_client:
         for attempt in range(max_retries):
             try:
                 # Prefer RFC 7592 Bearer token authentication

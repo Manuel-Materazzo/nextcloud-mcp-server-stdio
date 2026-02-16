@@ -22,6 +22,8 @@ from nextcloud_mcp_server.auth.userinfo_routes import (
     _query_idp_userinfo,
 )
 
+from ..http import nextcloud_httpx_client
+
 logger = logging.getLogger(__name__)
 
 
@@ -142,7 +144,7 @@ async def oauth_login(request: Request) -> RedirectResponse | JSONResponse:
             )
 
         # Fetch authorization endpoint
-        async with httpx.AsyncClient() as http_client:
+        async with nextcloud_httpx_client() as http_client:
             response = await http_client.get(discovery_url)
             response.raise_for_status()
             discovery = response.json()
@@ -286,7 +288,7 @@ async def oauth_login_callback(request: Request) -> RedirectResponse | HTMLRespo
             if code_verifier:
                 token_params["code_verifier"] = code_verifier
 
-            async with httpx.AsyncClient() as http_client:
+            async with nextcloud_httpx_client() as http_client:
                 response = await http_client.post(
                     oauth_client.token_endpoint,
                     data=token_params,
@@ -296,7 +298,7 @@ async def oauth_login_callback(request: Request) -> RedirectResponse | HTMLRespo
         else:
             # Integrated mode (Nextcloud OIDC)
             discovery_url = oauth_config.get("discovery_url")
-            async with httpx.AsyncClient() as http_client:
+            async with nextcloud_httpx_client() as http_client:
                 response = await http_client.get(discovery_url)
                 response.raise_for_status()
                 discovery = response.json()
@@ -314,7 +316,7 @@ async def oauth_login_callback(request: Request) -> RedirectResponse | HTMLRespo
             if code_verifier:
                 token_params["code_verifier"] = code_verifier
 
-            async with httpx.AsyncClient() as http_client:
+            async with nextcloud_httpx_client() as http_client:
                 response = await http_client.post(
                     token_endpoint,
                     data=token_params,

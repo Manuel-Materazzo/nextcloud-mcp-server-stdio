@@ -21,6 +21,8 @@ import httpx
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+from ..http import nextcloud_httpx_client
+
 if TYPE_CHECKING:
     from nextcloud_mcp_server.auth.storage import RefreshTokenStorage
 
@@ -252,7 +254,9 @@ async def provision_app_password(request: Request) -> JSONResponse:
 
     # Validate app password against Nextcloud
     try:
-        async with httpx.AsyncClient(timeout=NEXTCLOUD_VALIDATION_TIMEOUT) as client:
+        async with nextcloud_httpx_client(
+            timeout=NEXTCLOUD_VALIDATION_TIMEOUT
+        ) as client:
             # Use OCS API to verify credentials
             test_url = f"{nextcloud_host}/ocs/v1.php/cloud/user"
             response = await client.get(
@@ -380,7 +384,9 @@ async def delete_app_password(request: Request) -> JSONResponse:
     nextcloud_host = settings.nextcloud_host
 
     try:
-        async with httpx.AsyncClient(timeout=NEXTCLOUD_VALIDATION_TIMEOUT) as client:
+        async with nextcloud_httpx_client(
+            timeout=NEXTCLOUD_VALIDATION_TIMEOUT
+        ) as client:
             test_url = f"{nextcloud_host}/ocs/v1.php/cloud/user"
             response = await client.get(
                 test_url,

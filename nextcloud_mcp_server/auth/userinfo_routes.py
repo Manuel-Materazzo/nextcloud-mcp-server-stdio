@@ -13,7 +13,6 @@ import traceback
 from pathlib import Path
 from typing import Any
 
-import httpx
 from jinja2 import Environment, FileSystemLoader
 from starlette.authentication import requires
 from starlette.requests import Request
@@ -21,6 +20,8 @@ from starlette.responses import HTMLResponse, JSONResponse
 
 from nextcloud_mcp_server.client import NextcloudClient
 from nextcloud_mcp_server.config import get_settings
+
+from ..http import nextcloud_httpx_client
 
 logger = logging.getLogger(__name__)
 
@@ -257,7 +258,7 @@ async def _get_userinfo_endpoint(oauth_ctx: dict[str, Any]) -> str | None:
         return None
 
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with nextcloud_httpx_client(timeout=10.0) as client:
             response = await client.get(discovery_url)
             response.raise_for_status()
             discovery = response.json()
@@ -290,7 +291,7 @@ async def _query_idp_userinfo(
         User info dictionary from IdP, or None if query fails
     """
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with nextcloud_httpx_client(timeout=10.0) as client:
             response = await client.get(
                 userinfo_uri,
                 headers={"Authorization": f"Bearer {access_token_str}"},

@@ -31,6 +31,8 @@ from nextcloud_mcp_server.observability.metrics import (
     record_oauth_token_validation,
 )
 
+from ..http import nextcloud_httpx_client
+
 logger = logging.getLogger(__name__)
 
 
@@ -61,7 +63,7 @@ class UnifiedTokenVerifier(TokenVerifier):
         self.mode = "exchange" if settings.enable_token_exchange else "multi-audience"
 
         # Common components for all modes
-        self.http_client = httpx.AsyncClient(timeout=10.0)
+        self.http_client = nextcloud_httpx_client(timeout=10.0)
 
         # JWT verification support
         self.jwks_client: PyJWKClient | None = None
