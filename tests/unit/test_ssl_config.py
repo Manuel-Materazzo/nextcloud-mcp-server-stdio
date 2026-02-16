@@ -2,8 +2,10 @@
 
 import logging
 import os
+import ssl
 from unittest.mock import patch
 
+import certifi
 import httpx
 import pytest
 
@@ -64,17 +66,26 @@ class TestGetNextcloudSSLVerify:
                 result = get_nextcloud_ssl_verify()
                 assert result is False
 
-    def test_ca_bundle_returns_path(self, tmp_path):
-        ca_file = tmp_path / "ca.pem"
-        ca_file.write_text(
-            "-----BEGIN CERTIFICATE-----\ntest\n-----END CERTIFICATE-----\n"
-        )
+    def test_ca_bundle_returns_ssl_context(self):
+        ca_bundle = certifi.where()
         with patch(
             "nextcloud_mcp_server.config.get_settings",
-            return_value=Settings(nextcloud_ca_bundle=str(ca_file)),
+            return_value=Settings(nextcloud_ca_bundle=ca_bundle),
         ):
             result = get_nextcloud_ssl_verify()
-            assert result == str(ca_file)
+            assert isinstance(result, ssl.SSLContext)
+
+    def test_ca_bundle_ssl_context_has_loaded_certs(self):
+        """SSLContext created from CA bundle should have loaded certificates."""
+        ca_bundle = certifi.where()
+        with patch(
+            "nextcloud_mcp_server.config.get_settings",
+            return_value=Settings(nextcloud_ca_bundle=ca_bundle),
+        ):
+            result = get_nextcloud_ssl_verify()
+            assert isinstance(result, ssl.SSLContext)
+            stats = result.cert_store_stats()
+            assert stats["x509_ca"] > 0
 
     def test_verify_false_takes_precedence_over_ca_bundle(self, tmp_path):
         """When verify_ssl=False, ca_bundle is ignored (False wins)."""

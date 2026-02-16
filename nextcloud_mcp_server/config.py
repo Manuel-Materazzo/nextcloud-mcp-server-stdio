@@ -2,6 +2,7 @@ import logging
 import logging.config
 import os
 import socket
+import ssl
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Optional
@@ -596,17 +597,18 @@ def get_settings() -> Settings:
     )
 
 
-def get_nextcloud_ssl_verify() -> bool | str:
+def get_nextcloud_ssl_verify() -> bool | ssl.SSLContext:
     """Return the SSL verification setting for Nextcloud connections.
 
     Returns:
         - False if NEXTCLOUD_VERIFY_SSL=false (disable verification)
-        - CA bundle path if NEXTCLOUD_CA_BUNDLE is set (custom CA)
+        - ssl.SSLContext if NEXTCLOUD_CA_BUNDLE is set (custom CA)
         - True otherwise (default system CA verification)
     """
     settings = get_settings()
     if not settings.nextcloud_verify_ssl:
         return False
     if settings.nextcloud_ca_bundle:
-        return settings.nextcloud_ca_bundle
+        ctx = ssl.create_default_context(cafile=settings.nextcloud_ca_bundle)
+        return ctx
     return True

@@ -185,7 +185,11 @@ async def test_provision_app_password_success(temp_storage, mocker):
     # Mock settings (imported locally in the function)
     mocker.patch(
         "nextcloud_mcp_server.config.get_settings",
-        return_value=MagicMock(nextcloud_host="http://localhost:8080"),
+        return_value=MagicMock(
+            nextcloud_host="http://localhost:8080",
+            nextcloud_verify_ssl=True,
+            nextcloud_ca_bundle=None,
+        ),
     )
 
     # Mock httpx client for Nextcloud validation
@@ -230,7 +234,11 @@ async def test_provision_app_password_nextcloud_validation_fails(mocker):
     """Test that failed Nextcloud validation returns 401."""
     mocker.patch(
         "nextcloud_mcp_server.config.get_settings",
-        return_value=MagicMock(nextcloud_host="http://localhost:8080"),
+        return_value=MagicMock(
+            nextcloud_host="http://localhost:8080",
+            nextcloud_verify_ssl=True,
+            nextcloud_ca_bundle=None,
+        ),
     )
 
     # Mock httpx client to return 401
@@ -349,7 +357,11 @@ async def test_delete_app_password_success(temp_storage, mocker):
     # Mock settings (imported locally in the function)
     mocker.patch(
         "nextcloud_mcp_server.config.get_settings",
-        return_value=MagicMock(nextcloud_host="http://localhost:8080"),
+        return_value=MagicMock(
+            nextcloud_host="http://localhost:8080",
+            nextcloud_verify_ssl=True,
+            nextcloud_ca_bundle=None,
+        ),
     )
 
     # Mock httpx client for Nextcloud validation
@@ -393,7 +405,11 @@ async def test_delete_app_password_not_found(temp_storage, mocker):
     # Mock settings (imported locally in the function)
     mocker.patch(
         "nextcloud_mcp_server.config.get_settings",
-        return_value=MagicMock(nextcloud_host="http://localhost:8080"),
+        return_value=MagicMock(
+            nextcloud_host="http://localhost:8080",
+            nextcloud_verify_ssl=True,
+            nextcloud_ca_bundle=None,
+        ),
     )
 
     # Mock httpx client for Nextcloud validation
@@ -432,7 +448,11 @@ async def test_delete_app_password_invalid_credentials(mocker):
     """Test that invalid credentials returns 401 for deletion."""
     mocker.patch(
         "nextcloud_mcp_server.config.get_settings",
-        return_value=MagicMock(nextcloud_host="http://localhost:8080"),
+        return_value=MagicMock(
+            nextcloud_host="http://localhost:8080",
+            nextcloud_verify_ssl=True,
+            nextcloud_ca_bundle=None,
+        ),
     )
 
     # Mock httpx client to return 401
@@ -502,7 +522,11 @@ async def test_provision_app_password_rate_limiting(mocker):
     """Test that rate limiting blocks excessive provisioning attempts."""
     mocker.patch(
         "nextcloud_mcp_server.config.get_settings",
-        return_value=MagicMock(nextcloud_host="http://localhost:8080"),
+        return_value=MagicMock(
+            nextcloud_host="http://localhost:8080",
+            nextcloud_verify_ssl=True,
+            nextcloud_ca_bundle=None,
+        ),
     )
 
     # Mock httpx client to return 401 (failed validation)
@@ -561,7 +585,11 @@ async def test_rate_limiting_is_per_user(mocker):
     """Test that rate limiting is applied per user, not globally."""
     mocker.patch(
         "nextcloud_mcp_server.config.get_settings",
-        return_value=MagicMock(nextcloud_host="http://localhost:8080"),
+        return_value=MagicMock(
+            nextcloud_host="http://localhost:8080",
+            nextcloud_verify_ssl=True,
+            nextcloud_ca_bundle=None,
+        ),
     )
 
     # Mock httpx client to return 401
