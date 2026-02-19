@@ -1414,6 +1414,67 @@ class RefreshTokenStorage:
         logger.debug(f"Found {len(user_ids)} users with app passwords")
         return user_ids
 
+    async def cleanup_invalid_app_passwords(self, nextcloud_host: str) -> list[str]:
+        """
+        Validate stored app passwords against Nextcloud and remove invalid ones.
+
+        Makes a lightweight OCS request for each stored user to check if credentials
+        are still valid. Removes entries that return 401/403.
+
+        Args:
+            nextcloud_host: Nextcloud base URL
+
+        Returns:
+            List of user IDs whose app passwords were removed
+        """
+        import httpx
+
+        if not self._initialized:
+            await self.initialize()
+
+        user_ids = await self.get_all_app_password_user_ids()
+        if not user_ids:
+            return []
+
+        removed: list[str] = []
+
+        for user_id in user_ids:
+            app_password = await self.get_app_password(user_id)
+            if not app_password:
+                continue
+
+            try:
+                async with httpx.AsyncClient(
+                    base_url=nextcloud_host,
+                    auth=httpx.BasicAuth(user_id, app_password),
+                    timeout=10.0,
+                ) as client:
+                    response = await client.get(
+                        "/ocs/v2.php/cloud/user",
+                        headers={
+                            "OCS-APIRequest": "true",
+                            "Accept": "application/json",
+                        },
+                    )
+
+                if response.status_code in (401, 403):
+                    logger.info(
+                        f"App password for {user_id} is invalid "
+                        f"(HTTP {response.status_code}), removing"
+                    )
+                    await self.delete_app_password(user_id)
+                    removed.append(user_id)
+                else:
+                    logger.debug(
+                        f"App password for {user_id} validated "
+                        f"(HTTP {response.status_code})"
+                    )
+
+            except Exception as e:
+                logger.warning(f"Could not validate app password for {user_id}: {e}")
+
+        return removed
+
 
 async def generate_encryption_key() -> str:
     """

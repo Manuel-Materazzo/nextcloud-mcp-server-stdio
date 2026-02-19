@@ -2400,6 +2400,30 @@ async def test_users_setup(anyio_backend, nc_client: NextcloudClient):
             except Exception as e:
                 logger.warning(f"Error deleting test user {username}: {e}")
 
+        # Clean up app passwords from MCP server to prevent stale scanners
+        for username in created_users:
+            try:
+                import subprocess
+
+                subprocess.run(
+                    [
+                        "docker",
+                        "compose",
+                        "exec",
+                        "-T",
+                        "mcp-multi-user-basic",
+                        "sqlite3",
+                        "/app/data/tokens.db",
+                        f"DELETE FROM app_passwords WHERE user_id = '{username}';",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                )
+                logger.info(f"Cleaned up app password for {username}")
+            except Exception as e:
+                logger.debug(f"App password cleanup for {username}: {e}")
+
 
 async def _get_oauth_token_for_user(
     browser,

@@ -1826,6 +1826,19 @@ def get_app(transport: str = "streamable-http", enabled_apps: list[str] | None =
                         f"Cannot start vector sync - Qdrant initialization failed: {e}"
                     ) from e
 
+                # Clean up stale app passwords at startup (BasicAuth mode only)
+                if not oauth_enabled:
+                    try:
+                        removed = await token_storage.cleanup_invalid_app_passwords(
+                            nextcloud_host=nextcloud_host_for_sync
+                        )
+                        if removed:
+                            logger.info(
+                                f"Cleaned up {len(removed)} stale app password(s): {removed}"
+                            )
+                    except Exception as e:
+                        logger.warning(f"App password cleanup failed (non-fatal): {e}")
+
                 # Initialize shared state
                 send_stream, receive_stream = anyio.create_memory_object_stream(
                     max_buffer_size=settings.vector_sync_queue_max_size

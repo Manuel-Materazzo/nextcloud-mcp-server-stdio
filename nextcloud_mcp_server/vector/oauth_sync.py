@@ -31,7 +31,7 @@ from anyio.streams.memory import (
     MemoryObjectReceiveStream,
     MemoryObjectSendStream,
 )
-from httpx import BasicAuth
+from httpx import BasicAuth, HTTPStatusError
 
 from nextcloud_mcp_server.client import NextcloudClient
 from nextcloud_mcp_server.config import get_settings
@@ -210,8 +210,35 @@ async def user_scanner_task(
     mode_label = "BasicAuth" if use_basic_auth else "OAuth"
     logger.info(f"[{mode_label}] Scanner started for user: {user_id}")
     settings = get_settings()
+    max_consecutive_errors = 5
 
     task_status.started()
+
+    # Pre-validate credentials before entering scan loop
+    try:
+        nc_client = await get_user_client(
+            user_id, token_broker, nextcloud_host, use_basic_auth=use_basic_auth
+        )
+        try:
+            await nc_client.capabilities()  # Lightweight OCS call to validate creds
+            logger.info(f"[{mode_label}] Credentials validated for {user_id}")
+        except HTTPStatusError as e:
+            if e.response.status_code in (401, 403):
+                logger.warning(
+                    f"[{mode_label}] Credential validation failed for {user_id} "
+                    f"(HTTP {e.response.status_code}), not starting scan loop"
+                )
+                return
+            raise
+        finally:
+            await nc_client.close()
+    except NotProvisionedError:
+        logger.warning(
+            f"[{mode_label}] User {user_id} not provisioned, not starting scan loop"
+        )
+        return
+
+    consecutive_errors = 0
 
     while not shutdown_event.is_set():
         nc_client = None
@@ -228,20 +255,60 @@ async def user_scanner_task(
                 nc_client=nc_client,
             )
 
+            consecutive_errors = 0  # Reset on success
+
         except NotProvisionedError:
             logger.warning(
                 f"[{mode_label}] User {user_id} no longer provisioned, stopping scanner"
             )
             break
 
+        except HTTPStatusError as e:
+            status_code = e.response.status_code
+            if status_code in (401, 403):
+                logger.warning(
+                    f"[{mode_label}] Scanner auth failed for {user_id} "
+                    f"(HTTP {status_code}), stopping scanner. "
+                    f"User may need to re-provision credentials."
+                )
+                break
+            elif status_code == 429:
+                logger.warning(
+                    f"[{mode_label}] Scanner rate-limited for {user_id}, "
+                    f"backing off 60s"
+                )
+                try:
+                    with anyio.move_on_after(60):
+                        await shutdown_event.wait()
+                except anyio.get_cancelled_exc_class():
+                    break
+                continue
+            else:
+                consecutive_errors += 1
+                logger.error(
+                    f"[{mode_label}] Scanner HTTP error for {user_id}: {e} "
+                    f"({consecutive_errors}/{max_consecutive_errors})",
+                    exc_info=True,
+                )
+
         except Exception as e:
+            consecutive_errors += 1
             logger.error(
-                f"[{mode_label}] Scanner error for {user_id}: {e}", exc_info=True
+                f"[{mode_label}] Scanner error for {user_id}: {e} "
+                f"({consecutive_errors}/{max_consecutive_errors})",
+                exc_info=True,
             )
 
         finally:
             if nc_client:
                 await nc_client.close()
+
+        if consecutive_errors >= max_consecutive_errors:
+            logger.error(
+                f"[{mode_label}] Scanner for {user_id} hit {max_consecutive_errors} "
+                f"consecutive errors, stopping scanner"
+            )
+            break
 
         # Sleep until next interval or wake event
         try:
