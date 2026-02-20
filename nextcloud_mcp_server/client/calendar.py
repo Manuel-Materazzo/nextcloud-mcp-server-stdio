@@ -6,12 +6,16 @@ import uuid
 from typing import Any, Dict, List, Optional
 
 import anyio
-from caldav.async_collection import AsyncCalendar
+from caldav.async_collection import AsyncCalendar, AsyncEvent
 from caldav.async_davclient import AsyncDAVClient
+from caldav.elements import cdav, dav
 from httpx import Auth
-from icalendar import Alarm, Calendar, vRecur
+from icalendar import Alarm, Calendar, vDDDTypes, vRecur
 from icalendar import Event as ICalEvent
 from icalendar import Todo as ICalTodo
+from lxml import etree  # type: ignore[import-untyped]
+
+from ..config import get_nextcloud_ssl_verify
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +38,7 @@ class CalendarClient:
             url=f"{base_url}/remote.php/dav/",
             username=username,
             auth=auth,
+            ssl_verify_cert=get_nextcloud_ssl_verify(),  # type: ignore[arg-type]  # caldav types say bool|str but passes through to httpx which accepts SSLContext
         )
         self._calendar_home_url = f"{base_url}/remote.php/dav/calendars/{username}/"
 
@@ -100,8 +105,6 @@ class CalendarClient:
         # Use custom PROPFIND with CalendarServer namespace (cs:) for calendar-color.
         # caldav library's nsmap lacks "CS" namespace, and its CalendarColor uses
         # Apple iCal namespace which Nextcloud doesn't recognize.
-        from lxml import etree  # type: ignore[import-untyped]
-
         propfind_body = """<?xml version="1.0" encoding="utf-8"?>
 <d:propfind xmlns:d="DAV:" xmlns:cs="http://calendarserver.org/ns/" xmlns:c="urn:ietf:params:xml:ns:caldav">
     <d:prop>
@@ -255,24 +258,88 @@ class CalendarClient:
         """List events in a calendar within date range."""
         calendar = self._get_calendar(calendar_name)
 
-        # Get all events using caldav library (now with proper filter)
-        events = await calendar.events()
+        if start_datetime or end_datetime:
+            # Build CalDAV REPORT with time-range filter for server-side filtering
+            events = await self._search_events_by_date(
+                calendar, start_datetime, end_datetime
+            )
+            # Expand is only used when both bounds are provided
+            expanded = bool(start_datetime and end_datetime)
+        else:
+            # No date filter — fetch all events
+            events = await calendar.events()
+            expanded = False
 
         result = []
         for event in events:
             await event.load(only_if_unloaded=True)
             if event.data:
-                event_dict = self._parse_ical_event(event.data)
-                if event_dict:
-                    event_dict["href"] = str(event.url)
-                    event_dict["etag"] = ""
-                    result.append(event_dict)
+                if expanded:
+                    # Server-side expansion: each response resource may contain
+                    # multiple VEVENTs (one per recurrence occurrence)
+                    for event_dict in self._parse_all_ical_events(event.data):
+                        event_dict["href"] = str(event.url)
+                        event_dict["etag"] = ""
+                        result.append(event_dict)
+                else:
+                    event_dict = self._parse_ical_event(event.data)
+                    if event_dict:
+                        event_dict["href"] = str(event.url)
+                        event_dict["etag"] = ""
+                        result.append(event_dict)
 
             if len(result) >= limit:
                 break
 
         logger.debug(f"Found {len(result)} events")
         return result
+
+    async def _search_events_by_date(
+        self,
+        calendar: AsyncCalendar,
+        start_datetime: Optional[dt.datetime] = None,
+        end_datetime: Optional[dt.datetime] = None,
+    ) -> list:
+        """Execute a CalDAV REPORT with time-range filter."""
+        # Ensure naive datetimes are treated as UTC
+        if start_datetime and start_datetime.tzinfo is None:
+            start_datetime = start_datetime.replace(tzinfo=dt.UTC)
+        if end_datetime and end_datetime.tzinfo is None:
+            end_datetime = end_datetime.replace(tzinfo=dt.UTC)
+
+        # Build comp-filter with time-range (mirrors sync Calendar.build_search_xml_query)
+        inner_comp_filter = cdav.CompFilter(name="VEVENT")
+        inner_comp_filter += cdav.TimeRange(start_datetime, end_datetime)
+        outer_comp_filter = cdav.CompFilter(name="VCALENDAR") + inner_comp_filter
+        filter_element = cdav.Filter() + outer_comp_filter
+
+        # When both bounds are provided, request server-side expansion of
+        # recurring events (RFC 4791 §9.6.5). Each occurrence is returned as
+        # a separate VEVENT with its own DTSTART, with RRULE stripped.
+        data = cdav.CalendarData()
+        if start_datetime and end_datetime:
+            data += cdav.Expand(start_datetime, end_datetime)
+
+        query = cdav.CalendarQuery() + [dav.Prop() + data] + filter_element
+
+        body = etree.tostring(
+            query.xmlelement(), encoding="utf-8", xml_declaration=True
+        )
+        assert calendar.client is not None
+        response = await calendar.client.report(str(calendar.url), body, depth=1)
+
+        # Parse response (same pattern as AsyncCalendar.search)
+        objects = []
+        response_data = response.expand_simple_props([cdav.CalendarData()])
+        for href, props in response_data.items():
+            if href == str(calendar.url):
+                continue
+            cal_data = props.get(cdav.CalendarData.tag)
+            if cal_data:
+                obj = AsyncEvent(client=calendar.client, data=cal_data, parent=calendar)
+                objects.append(obj)
+
+        return objects
 
     async def create_event(
         self, calendar_name: str, event_data: Dict[str, Any]
@@ -583,7 +650,7 @@ class CalendarClient:
         # Add categories
         categories = event_data.get("categories", "")
         if categories:
-            event.add("categories", categories.split(","))
+            event.add("categories", [c.strip() for c in categories.split(",")])
 
         # Add priority and status
         priority = event_data.get("priority", 5)
@@ -633,74 +700,91 @@ class CalendarClient:
         cal.add_component(event)
         return cal.to_ical().decode("utf-8")
 
+    def _extract_vevent_data(self, component) -> Dict[str, Any]:
+        """Extract event data from a single VEVENT component.
+
+        Shared helper used by both _parse_ical_event() and _parse_all_ical_events().
+        """
+        event_data: Dict[str, Any] = {
+            "uid": str(component.get("uid", "")),
+            "title": str(component.get("summary", "")),
+            "description": str(component.get("description", "")),
+            "location": str(component.get("location", "")),
+            "status": str(component.get("status", "CONFIRMED")),
+            "priority": int(component.get("priority", 5)),
+            "privacy": str(component.get("class", "PUBLIC")),
+            "url": str(component.get("url", "")),
+        }
+
+        # Handle dates
+        dtstart = component.get("dtstart")
+        if dtstart:
+            if isinstance(dtstart.dt, dt.date) and not isinstance(
+                dtstart.dt, dt.datetime
+            ):
+                event_data["start_datetime"] = dtstart.dt.isoformat()
+                event_data["all_day"] = True
+            else:
+                event_data["start_datetime"] = dtstart.dt.isoformat()
+                event_data["all_day"] = False
+
+        dtend = component.get("dtend")
+        if dtend:
+            if isinstance(dtend.dt, dt.date) and not isinstance(dtend.dt, dt.datetime):
+                event_data["end_datetime"] = dtend.dt.isoformat()
+            else:
+                event_data["end_datetime"] = dtend.dt.isoformat()
+
+        # Handle categories
+        categories = component.get("categories")
+        if categories:
+            event_data["categories"] = self._extract_categories(categories)
+
+        # Handle recurrence
+        rrule = component.get("rrule")
+        if rrule:
+            event_data["recurring"] = True
+            event_data["recurrence_rule"] = str(rrule)
+
+        # Handle attendees
+        attendees = []
+        for attendee in component.get("attendee", []):
+            if isinstance(attendee, list):
+                attendees.extend(str(a).replace("mailto:", "") for a in attendee)
+            else:
+                attendees.append(str(attendee).replace("mailto:", ""))
+        if attendees:
+            event_data["attendees"] = ",".join(attendees)
+
+        return event_data
+
     def _parse_ical_event(self, ical_text: str) -> Optional[Dict[str, Any]]:
-        """Parse iCalendar text and extract event data."""
+        """Parse iCalendar text and extract the first event."""
         try:
             cal = Calendar.from_ical(ical_text)
             for component in cal.walk():
                 if component.name == "VEVENT":
-                    event_data = {
-                        "uid": str(component.get("uid", "")),
-                        "title": str(component.get("summary", "")),
-                        "description": str(component.get("description", "")),
-                        "location": str(component.get("location", "")),
-                        "status": str(component.get("status", "CONFIRMED")),
-                        "priority": int(component.get("priority", 5)),
-                        "privacy": str(component.get("class", "PUBLIC")),
-                        "url": str(component.get("url", "")),
-                    }
-
-                    # Handle dates
-                    dtstart = component.get("dtstart")
-                    if dtstart:
-                        if isinstance(dtstart.dt, dt.date) and not isinstance(
-                            dtstart.dt, dt.datetime
-                        ):
-                            event_data["start_datetime"] = dtstart.dt.isoformat()
-                            event_data["all_day"] = True
-                        else:
-                            event_data["start_datetime"] = dtstart.dt.isoformat()
-                            event_data["all_day"] = False
-
-                    dtend = component.get("dtend")
-                    if dtend:
-                        if isinstance(dtend.dt, dt.date) and not isinstance(
-                            dtend.dt, dt.datetime
-                        ):
-                            event_data["end_datetime"] = dtend.dt.isoformat()
-                        else:
-                            event_data["end_datetime"] = dtend.dt.isoformat()
-
-                    # Handle categories
-                    categories = component.get("categories")
-                    if categories:
-                        event_data["categories"] = self._extract_categories(categories)
-
-                    # Handle recurrence
-                    rrule = component.get("rrule")
-                    if rrule:
-                        event_data["recurring"] = True
-                        event_data["recurrence_rule"] = str(rrule)
-
-                    # Handle attendees
-                    attendees = []
-                    for attendee in component.get("attendee", []):
-                        if isinstance(attendee, list):
-                            attendees.extend(
-                                str(a).replace("mailto:", "") for a in attendee
-                            )
-                        else:
-                            attendees.append(str(attendee).replace("mailto:", ""))
-                    if attendees:
-                        event_data["attendees"] = ",".join(attendees)
-
-                    return event_data
-
+                    return self._extract_vevent_data(component)
             return None
-
         except Exception as e:
             logger.error(f"Error parsing iCalendar event: {e}")
             return None
+
+    def _parse_all_ical_events(self, ical_text: str) -> list[Dict[str, Any]]:
+        """Parse iCalendar text and extract ALL event occurrences.
+
+        Used with server-side expansion where a single VCALENDAR contains
+        multiple VEVENT components (one per recurrence occurrence).
+        """
+        results: list[Dict[str, Any]] = []
+        try:
+            cal = Calendar.from_ical(ical_text)
+            for component in cal.walk():
+                if component.name == "VEVENT":
+                    results.append(self._extract_vevent_data(component))
+        except Exception as e:
+            logger.error(f"Error parsing iCalendar events: {e}")
+        return results
 
     def _merge_ical_properties(
         self, raw_ical: str, event_data: Dict[str, Any], event_uid: str
@@ -726,6 +810,50 @@ class CalendarClient:
                         component["CLASS"] = event_data["privacy"].upper()
                     if "url" in event_data:
                         component["URL"] = event_data["url"]
+
+                    # Handle categories
+                    if "categories" in event_data:
+                        categories_str = event_data["categories"]
+                        if categories_str:
+                            component["CATEGORIES"] = [
+                                c.strip() for c in categories_str.split(",")
+                            ]
+                        elif "CATEGORIES" in component:
+                            del component["CATEGORIES"]
+
+                    # Handle recurrence rule
+                    if "recurrence_rule" in event_data:
+                        rrule_str = event_data["recurrence_rule"]
+                        if rrule_str:
+                            component["RRULE"] = vRecur.from_ical(rrule_str)
+                        elif "RRULE" in component:
+                            del component["RRULE"]
+
+                    # Handle attendees
+                    if "attendees" in event_data:
+                        attendees_str = event_data["attendees"]
+                        # Remove all existing attendees first
+                        while "ATTENDEE" in component:
+                            del component["ATTENDEE"]
+                        if attendees_str:
+                            for email in attendees_str.split(","):
+                                if email.strip():
+                                    component.add("attendee", f"mailto:{email.strip()}")
+
+                    # Handle reminder (VALARM)
+                    if "reminder_minutes" in event_data:
+                        component.subcomponents = [
+                            sub
+                            for sub in component.subcomponents
+                            if sub.name != "VALARM"
+                        ]
+                        minutes = event_data["reminder_minutes"]
+                        if minutes > 0:
+                            alarm = Alarm()
+                            alarm.add("action", "DISPLAY")
+                            alarm.add("description", "Event reminder")
+                            alarm.add("trigger", dt.timedelta(minutes=-minutes))
+                            component.add_component(alarm)
 
                     # Handle dates
                     if "start_datetime" in event_data:
@@ -757,8 +885,6 @@ class CalendarClient:
                             component["DTEND"] = end_dt
 
                     # Update timestamps
-                    from icalendar import vDDDTypes
-
                     now = dt.datetime.now(dt.UTC)
                     component["LAST-MODIFIED"] = vDDDTypes(now)
                     component["DTSTAMP"] = vDDDTypes(now)
@@ -823,24 +949,18 @@ class CalendarClient:
         # Due date
         due = todo_data.get("due", "")
         if due:
-            from icalendar import vDDDTypes
-
             due_dt = self._ensure_timezone_aware(due)
             todo.add("due", vDDDTypes(due_dt))
 
         # Start date
         dtstart = todo_data.get("dtstart", "")
         if dtstart:
-            from icalendar import vDDDTypes
-
             start_dt = self._ensure_timezone_aware(dtstart)
             todo.add("dtstart", vDDDTypes(start_dt))
 
         # Completed timestamp
         completed = todo_data.get("completed", "")
         if completed:
-            from icalendar import vDDDTypes
-
             completed_dt = self._ensure_timezone_aware(completed)
             todo.add("completed", vDDDTypes(completed_dt))
 
@@ -929,9 +1049,6 @@ class CalendarClient:
                         component["PERCENT-COMPLETE"] = percent_value
                         logger.debug(f"Set PERCENT-COMPLETE to {percent_value}")
 
-                    # Import vDDDTypes at the beginning for datetime formatting
-                    from icalendar import vDDDTypes
-
                     # Handle due date
                     if "due" in todo_data:
                         due_str = todo_data["due"]
@@ -960,7 +1077,9 @@ class CalendarClient:
                     if "categories" in todo_data:
                         categories_str = todo_data["categories"]
                         if categories_str:
-                            component["CATEGORIES"] = categories_str.split(",")
+                            component["CATEGORIES"] = [
+                                c.strip() for c in categories_str.split(",")
+                            ]
                             logger.debug(f"Set CATEGORIES to {categories_str}")
 
                     # Update timestamps

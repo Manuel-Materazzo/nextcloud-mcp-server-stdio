@@ -171,6 +171,58 @@ NEXTCLOUD_PASSWORD=your_app_password_or_password
 
 ---
 
+## SSL/TLS Configuration (Optional)
+
+If your Nextcloud instance uses a self-signed certificate or a private CA (common with reverse proxies like Traefik or Caddy), the MCP server will reject the connection by default. Use these settings to configure certificate verification.
+
+### Custom CA Bundle (Recommended)
+
+Point the server at your CA certificate file:
+
+```dotenv
+NEXTCLOUD_CA_BUNDLE=/etc/ssl/certs/my-ca.pem
+```
+
+With Docker, mount the certificate as a read-only volume:
+
+```bash
+docker run \
+  -v /path/to/my-ca.pem:/etc/ssl/certs/my-ca.pem:ro \
+  -e NEXTCLOUD_CA_BUNDLE=/etc/ssl/certs/my-ca.pem \
+  -e NEXTCLOUD_HOST=https://nextcloud.local \
+  --env-file .env \
+  ghcr.io/cbcoutinho/nextcloud-mcp-server:latest
+```
+
+### Disable Verification (Development Only)
+
+> [!WARNING]
+> Disabling TLS verification is insecure. Only use this for local development or testing.
+
+```dotenv
+NEXTCLOUD_VERIFY_SSL=false
+```
+
+### Environment Variables Reference
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `NEXTCLOUD_VERIFY_SSL` | ⚠️ Optional | `true` | Set to `false` to disable TLS certificate verification |
+| `NEXTCLOUD_CA_BUNDLE` | ⚠️ Optional | - | Path to a PEM CA bundle file for custom certificate authorities |
+
+### Scope
+
+These settings apply to **all** outbound connections to Nextcloud and its OIDC endpoints, including:
+
+- Nextcloud API calls (Notes, Calendar, Contacts, WebDAV, etc.)
+- OIDC discovery and token endpoints
+- OAuth client registration (DCR)
+- Health checks
+
+They do **not** affect connections to internal services (Ollama, Qdrant, Unstructured) which have their own SSL configuration.
+
+---
+
 ## Semantic Search Configuration (Optional)
 
 **New in v0.58.0:** Simplified semantic search configuration with automatic dependency resolution.

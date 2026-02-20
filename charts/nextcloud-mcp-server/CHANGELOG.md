@@ -14,6 +14,237 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Configurable resource limits
 - Grafana dashboard annotations
 
+## nextcloud-mcp-server-0.57.72 (2026-02-20)
+
+## nextcloud-mcp-server-0.57.71 (2026-02-20)
+
+## nextcloud-mcp-server-0.57.70 (2026-02-20)
+
+### Fix
+
+- address PR #571 review comments
+- resolve stale credentials causing astrolabe background sync test failures
+
+### Refactor
+
+- enforce PLC0415 (import-outside-top-level) for source code
+
+## nextcloud-mcp-server-0.57.69 (2026-02-20)
+
+## nextcloud-mcp-server-0.57.68 (2026-02-19)
+
+## nextcloud-mcp-server-0.57.67 (2026-02-19)
+
+## nextcloud-mcp-server-0.57.66 (2026-02-18)
+
+## nextcloud-mcp-server-0.57.65 (2026-02-18)
+
+## nextcloud-mcp-server-0.57.64 (2026-02-18)
+
+## nextcloud-mcp-server-0.57.63 (2026-02-18)
+
+## nextcloud-mcp-server-0.57.62 (2026-02-18)
+
+### Fix
+
+- **deps**: update dependency mcp to >=1.26,<1.27
+
+## nextcloud-mcp-server-0.57.61 (2026-02-18)
+
+## nextcloud-mcp-server-0.57.60 (2026-02-18)
+
+## nextcloud-mcp-server-0.57.59 (2026-02-18)
+
+## nextcloud-mcp-server-0.57.58 (2026-02-18)
+
+## nextcloud-mcp-server-0.57.57 (2026-02-18)
+
+## nextcloud-mcp-server-0.57.56 (2026-02-18)
+
+## nextcloud-mcp-server-0.57.55 (2026-02-17)
+
+## nextcloud-mcp-server-0.57.54 (2026-02-17)
+
+## nextcloud-mcp-server-0.57.53 (2026-02-17)
+
+## nextcloud-mcp-server-0.57.52 (2026-02-17)
+
+## nextcloud-mcp-server-0.57.51 (2026-02-16)
+
+### Feat
+
+- add self-signed SSL certificate support for Nextcloud connections
+
+### Fix
+
+- add type: ignore for caldav ssl_verify_cert parameter
+- convert CA bundle path to ssl.SSLContext to avoid httpx deprecation warning
+
+## nextcloud-mcp-server-0.57.50 (2026-02-16)
+
+## nextcloud-mcp-server-0.57.49 (2026-02-16)
+
+### Refactor
+
+- remove stale astrolabe references from commitizen config
+- extract Astrolabe to separate repository
+
+## nextcloud-mcp-server-0.57.48 (2026-02-15)
+
+## nextcloud-mcp-server-0.57.47 (2026-02-15)
+
+## nextcloud-mcp-server-0.57.46 (2026-02-12)
+
+## nextcloud-mcp-server-0.57.45 (2026-02-12)
+
+## nextcloud-mcp-server-0.57.44 (2026-02-11)
+
+## nextcloud-mcp-server-0.57.43 (2026-02-11)
+
+## nextcloud-mcp-server-0.57.42 (2026-02-08)
+
+### Fix
+
+- strip whitespace from category names when splitting
+- handle categories, recurrence_rule, attendees, and reminder_minutes in update_event
+
+## nextcloud-mcp-server-0.57.41 (2026-02-08)
+
+### Fix
+
+- expand recurring events in date-range queries
+
+## nextcloud-mcp-server-0.57.40 (2026-02-07)
+
+### Fix
+
+- use CalDAV time-range filter for calendar date range queries
+
+## nextcloud-mcp-server-0.57.39 (2026-02-07)
+
+## nextcloud-mcp-server-0.57.38 (2026-02-07)
+
+## nextcloud-mcp-server-0.57.37 (2026-02-06)
+
+## nextcloud-mcp-server-0.57.36 (2026-02-06)
+
+## nextcloud-mcp-server-0.57.35 (2026-02-06)
+
+## nextcloud-mcp-server-0.57.34 (2026-02-06)
+
+## nextcloud-mcp-server-0.57.33 (2026-02-06)
+
+## nextcloud-mcp-server-0.57.32 (2026-02-06)
+
+## nextcloud-mcp-server-0.57.31 (2026-02-06)
+
+## nextcloud-mcp-server-0.57.30 (2026-02-06)
+
+## nextcloud-mcp-server-0.57.29 (2026-02-04)
+
+## nextcloud-mcp-server-0.57.28 (2026-02-03)
+
+## nextcloud-mcp-server-0.57.27 (2026-02-03)
+
+### Fix
+
+- **helm**: add backward compatibility for legacy persistence configs
+
+## nextcloud-mcp-server-0.57.26 (2026-01-31)
+
+## nextcloud-mcp-server-0.57.25 (2026-01-31)
+
+## nextcloud-mcp-server-0.57.24 (2026-01-31)
+
+## nextcloud-mcp-server-0.57.23 (2026-01-30)
+
+## nextcloud-mcp-server-0.57.22 (2026-01-30)
+
+## nextcloud-mcp-server-0.57.21 (2026-01-30)
+
+## nextcloud-mcp-server-0.57.20 (2026-01-29)
+
+## nextcloud-mcp-server-0.57.19 (2026-01-28)
+
+## nextcloud-mcp-server-0.57.18 (2026-01-28)
+
+## nextcloud-mcp-server-0.57.17 (2026-01-28)
+
+## nextcloud-mcp-server-0.57.16 (2026-01-28)
+
+### Feat
+
+- **astrolabe**: add background token refresh job
+
+### Fix
+
+- **astrolabe**: add pagination and psalm fixes for token refresh
+- **astrolabe**: add locking to prevent token refresh race condition
+- **astrolabe**: add issued_at to on-demand token refresh
+
+## nextcloud-mcp-server-0.57.15 (2026-01-26)
+
+### Feat
+
+- **scripts**: add database query helpers for development
+
+### Fix
+
+- **astrolabe**: resolve Psalm type errors in PDF preview code
+- **astrolabe**: fix Psalm baseline and ESLint import order
+- **astrolabe**: load pdfjs-dist externally to fix PDF viewer
+- **astrolabe**: improve error messages for authorization issues
+- **astrolabe**: rename OAuthController and fix app password check
+- **tests**: improve Astrolabe integration test reliability
+- **astrolabe**: update Plotly title attributes for v3 compatibility
+- **deps**: update dependency plotly.js-dist-min to v3
+
+### Refactor
+
+- **api**: split management.py into domain-focused modules
+- **astrolabe**: replace client-side PDF.js with server-side PyMuPDF rendering
+
+## nextcloud-mcp-server-0.57.14 (2026-01-26)
+
+## nextcloud-mcp-server-0.57.13 (2026-01-24)
+
+## nextcloud-mcp-server-0.57.12 (2026-01-20)
+
+## nextcloud-mcp-server-0.57.11 (2026-01-20)
+
+## nextcloud-mcp-server-0.57.10 (2026-01-19)
+
+## nextcloud-mcp-server-0.57.9 (2026-01-19)
+
+## nextcloud-mcp-server-0.57.8 (2026-01-18)
+
+## nextcloud-mcp-server-0.57.7 (2026-01-17)
+
+### Fix
+
+- **astrolabe**: improve token refresh error handling and validation
+- **astrolabe**: delete stale tokens when refresh fails
+- **astrolabe**: resolve CI failures for code quality checks
+- **astrolabe**: use internal URL for OAuth token refresh
+
+### Refactor
+
+- **astrolabe**: add PHP property types to fix Psalm errors
+- **astrolabe**: upgrade to @nextcloud/vue 9.3.3 API
+
+## nextcloud-mcp-server-0.57.6 (2026-01-16)
+
+## nextcloud-mcp-server-0.57.5 (2026-01-16)
+
+## nextcloud-mcp-server-0.57.4 (2026-01-16)
+
+### Fix
+
+- **astrolabe**: Address reviewer feedback for hybrid mode
+- **astrolabe**: Fix NcSelect options and CSS loading
+- **astrolabe**: fix OAuth flow and settings UI for hybrid mode
+- **api**: return OIDC config in hybrid mode for Astrolabe OAuth flow
+
 ## nextcloud-mcp-server-0.57.3 (2026-01-15)
 
 ## nextcloud-mcp-server-0.57.2 (2026-01-15)

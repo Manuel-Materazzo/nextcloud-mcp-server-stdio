@@ -5,6 +5,123 @@ All notable changes to the Nextcloud MCP Server will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [PEP 440](https://peps.python.org/pep-0440/).
 
+## v0.64.2 (2026-02-20)
+
+### Fix
+
+- address PR #571 review comments
+- resolve stale credentials causing astrolabe background sync test failures
+
+### Refactor
+
+- enforce PLC0415 (import-outside-top-level) for source code
+
+## v0.64.1 (2026-02-18)
+
+### Fix
+
+- **deps**: update dependency mcp to >=1.26,<1.27
+
+## v0.64.0 (2026-02-16)
+
+### Feat
+
+- add self-signed SSL certificate support for Nextcloud connections
+
+### Fix
+
+- add type: ignore for caldav ssl_verify_cert parameter
+- convert CA bundle path to ssl.SSLContext to avoid httpx deprecation warning
+
+## v0.63.5 (2026-02-16)
+
+### Refactor
+
+- remove stale astrolabe references from commitizen config
+- extract Astrolabe to separate repository
+
+## v0.63.4 (2026-02-08)
+
+### Fix
+
+- strip whitespace from category names when splitting
+- handle categories, recurrence_rule, attendees, and reminder_minutes in update_event
+
+## v0.63.3 (2026-02-08)
+
+### Fix
+
+- expand recurring events in date-range queries
+
+## v0.63.2 (2026-02-07)
+
+### Fix
+
+- use CalDAV time-range filter for calendar date range queries
+
+## v0.63.1 (2026-02-03)
+
+### Fix
+
+- **helm**: add backward compatibility for legacy persistence configs
+
+## v0.63.0 (2026-01-28)
+
+### Feat
+
+- **astrolabe**: add background token refresh job
+
+### Fix
+
+- **astrolabe**: add pagination and psalm fixes for token refresh
+- **astrolabe**: add locking to prevent token refresh race condition
+- **astrolabe**: add issued_at to on-demand token refresh
+
+## v0.62.0 (2026-01-26)
+
+### Feat
+
+- **scripts**: add database query helpers for development
+
+### Fix
+
+- **astrolabe**: resolve Psalm type errors in PDF preview code
+- **astrolabe**: fix Psalm baseline and ESLint import order
+- **astrolabe**: load pdfjs-dist externally to fix PDF viewer
+- **astrolabe**: improve error messages for authorization issues
+- **astrolabe**: rename OAuthController and fix app password check
+- **tests**: improve Astrolabe integration test reliability
+- **astrolabe**: update Plotly title attributes for v3 compatibility
+- **deps**: update dependency plotly.js-dist-min to v3
+
+### Refactor
+
+- **api**: split management.py into domain-focused modules
+- **astrolabe**: replace client-side PDF.js with server-side PyMuPDF rendering
+
+## v0.61.5 (2026-01-17)
+
+### Fix
+
+- **astrolabe**: improve token refresh error handling and validation
+- **astrolabe**: delete stale tokens when refresh fails
+- **astrolabe**: resolve CI failures for code quality checks
+- **astrolabe**: use internal URL for OAuth token refresh
+
+### Refactor
+
+- **astrolabe**: add PHP property types to fix Psalm errors
+- **astrolabe**: upgrade to @nextcloud/vue 9.3.3 API
+
+## v0.61.4 (2026-01-16)
+
+### Fix
+
+- **astrolabe**: Address reviewer feedback for hybrid mode
+- **astrolabe**: Fix NcSelect options and CSS loading
+- **astrolabe**: fix OAuth flow and settings UI for hybrid mode
+- **api**: return OIDC config in hybrid mode for Astrolabe OAuth flow
+
 ## v0.61.3 (2026-01-15)
 
 ### Fix

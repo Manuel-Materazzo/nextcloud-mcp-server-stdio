@@ -273,6 +273,86 @@ async def test_update_event(nc_client: NextcloudClient, temporary_event: dict):
         raise
 
 
+async def test_update_event_extended_fields(
+    nc_client: NextcloudClient, temporary_calendar: str
+):
+    """Test updating categories, recurrence_rule, attendees, and reminder_minutes."""
+    calendar_name = temporary_calendar
+
+    tomorrow = datetime.now() + timedelta(days=1)
+    event_data = {
+        "title": "Extended Fields Update Test",
+        "start_datetime": tomorrow.strftime("%Y-%m-%dT10:00:00"),
+        "end_datetime": tomorrow.strftime("%Y-%m-%dT11:00:00"),
+        "description": "Base event for extended-field update test",
+    }
+
+    event_uid = None
+    try:
+        result = await nc_client.calendar.create_event(calendar_name, event_data)
+        event_uid = result["uid"]
+        logger.info(f"Created base event for extended fields test: {event_uid}")
+
+        # --- Phase 1: Set all four extended fields ---
+        updated_data = {
+            "categories": "work,meeting",
+            "recurrence_rule": "FREQ=WEEKLY;COUNT=4",
+            "attendees": "alice@example.com,bob@example.com",
+            "reminder_minutes": 15,
+        }
+        await nc_client.calendar.update_event(calendar_name, event_uid, updated_data)
+
+        retrieved, _ = await nc_client.calendar.get_event(calendar_name, event_uid)
+
+        # Verify categories
+        assert "work" in retrieved.get("categories", "")
+        assert "meeting" in retrieved.get("categories", "")
+
+        # Verify recurrence rule
+        assert retrieved.get("recurring") is True
+        assert "WEEKLY" in retrieved.get("recurrence_rule", "")
+
+        # Verify attendees
+        attendees = retrieved.get("attendees", "")
+        assert "alice@example.com" in attendees
+        assert "bob@example.com" in attendees
+
+        logger.info("Phase 1 passed: all extended fields set correctly")
+
+        # --- Phase 2: Clear all four extended fields ---
+        cleared_data = {
+            "categories": "",
+            "recurrence_rule": "",
+            "attendees": "",
+            "reminder_minutes": 0,
+        }
+        await nc_client.calendar.update_event(calendar_name, event_uid, cleared_data)
+
+        cleared, _ = await nc_client.calendar.get_event(calendar_name, event_uid)
+
+        # Verify categories cleared
+        assert not cleared.get("categories")
+
+        # Verify recurrence cleared
+        assert cleared.get("recurring") is not True
+        assert not cleared.get("recurrence_rule")
+
+        # Verify attendees cleared
+        assert not cleared.get("attendees")
+
+        logger.info("Phase 2 passed: all extended fields cleared correctly")
+
+    except Exception as e:
+        logger.error(f"Extended fields update test failed: {e}")
+        raise
+    finally:
+        if event_uid:
+            try:
+                await nc_client.calendar.delete_event(calendar_name, event_uid)
+            except Exception:
+                pass
+
+
 async def test_create_event_with_attendees(
     nc_client: NextcloudClient, temporary_calendar: str
 ):
@@ -378,6 +458,177 @@ async def test_event_with_url_and_categories(
     except Exception as e:
         logger.error(f"Event with metadata test failed: {e}")
         raise
+
+
+async def test_list_events_date_range_filtering(
+    nc_client: NextcloudClient, temporary_calendar: str
+):
+    """Test that date range filtering actually excludes events outside the range.
+
+    Reproduces GH-538: get_calendar_events() accepted date range parameters
+    but returned events from the entire calendar history, ignoring date filters.
+    """
+    calendar_name = temporary_calendar
+    past_uid = None
+    future_uid = None
+
+    try:
+        # Create Event A: 30 days in the past
+        past_date = datetime.now() - timedelta(days=30)
+        past_event_data = {
+            "title": f"Past Event {uuid.uuid4().hex[:8]}",
+            "start_datetime": past_date.strftime("%Y-%m-%dT10:00:00"),
+            "end_datetime": past_date.strftime("%Y-%m-%dT11:00:00"),
+            "description": "Event in the past for date range test",
+        }
+        result_past = await nc_client.calendar.create_event(
+            calendar_name, past_event_data
+        )
+        past_uid = result_past["uid"]
+        logger.info(f"Created past event: {past_uid}")
+
+        # Create Event B: 1 day in the future
+        future_date = datetime.now() + timedelta(days=1)
+        future_event_data = {
+            "title": f"Future Event {uuid.uuid4().hex[:8]}",
+            "start_datetime": future_date.strftime("%Y-%m-%dT14:00:00"),
+            "end_datetime": future_date.strftime("%Y-%m-%dT15:00:00"),
+            "description": "Event in the future for date range test",
+        }
+        result_future = await nc_client.calendar.create_event(
+            calendar_name, future_event_data
+        )
+        future_uid = result_future["uid"]
+        logger.info(f"Created future event: {future_uid}")
+
+        # Query with date range: today → 7 days ahead
+        now = datetime.now()
+        week_ahead = now + timedelta(days=7)
+
+        events = await nc_client.calendar.get_calendar_events(
+            calendar_name=calendar_name,
+            start_datetime=now,
+            end_datetime=week_ahead,
+            limit=50,
+        )
+
+        event_uids = [e["uid"] for e in events]
+
+        # Future event (tomorrow) SHOULD be in results
+        assert future_uid in event_uids, (
+            f"Future event {future_uid} should be in date-filtered results"
+        )
+
+        # Past event (30 days ago) should NOT be in results
+        assert past_uid not in event_uids, (
+            f"Past event {past_uid} should be excluded by date range filter "
+            f"(GH-538: date range was being ignored)"
+        )
+
+        logger.info(
+            f"Date range filtering works: {len(events)} events returned, "
+            f"past event correctly excluded"
+        )
+
+    finally:
+        # Cleanup both events
+        for uid in [past_uid, future_uid]:
+            if uid:
+                try:
+                    await nc_client.calendar.delete_event(calendar_name, uid)
+                except Exception as e:
+                    logger.warning(f"Cleanup failed for event {uid}: {e}")
+
+
+async def test_recurring_event_date_range_expansion(
+    nc_client: NextcloudClient, temporary_calendar: str
+):
+    """Test that recurring events are expanded into individual occurrences.
+
+    When querying with a date range, a recurring event should return one
+    event dict per occurrence within the range, each with the correct
+    start_datetime for that occurrence (not the original master event date).
+
+    This is a follow-up to GH-538: the time-range filter correctly selected
+    recurring events, but returned the master event with its original DTSTART
+    instead of expanding occurrences.
+    """
+    calendar_name = temporary_calendar
+    event_uid = None
+
+    try:
+        # Create a daily recurring event starting 7 days ago
+        start = datetime.now() - timedelta(days=7)
+        event_data = {
+            "title": f"Daily Recurrence {uuid.uuid4().hex[:8]}",
+            "start_datetime": start.strftime("%Y-%m-%dT09:00:00"),
+            "end_datetime": start.strftime("%Y-%m-%dT10:00:00"),
+            "description": "Daily recurring event for expansion test",
+            "recurring": True,
+            "recurrence_rule": "FREQ=DAILY",
+        }
+        result = await nc_client.calendar.create_event(calendar_name, event_data)
+        event_uid = result["uid"]
+        logger.info(f"Created daily recurring event: {event_uid}")
+
+        # Query with date range: today → 3 days ahead
+        query_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        query_end = query_start + timedelta(days=3)
+
+        events = await nc_client.calendar.get_calendar_events(
+            calendar_name=calendar_name,
+            start_datetime=query_start,
+            end_datetime=query_end,
+            limit=50,
+        )
+
+        # Filter to only our recurring event (calendar may have others)
+        our_events = [e for e in events if e["uid"] == event_uid]
+
+        # Should have multiple occurrences (one per day in the range)
+        assert len(our_events) >= 2, (
+            f"Expected multiple expanded occurrences, got {len(our_events)}. "
+            f"Expansion may not be working."
+        )
+
+        # Each occurrence should have a different start_datetime
+        start_dates = [e["start_datetime"] for e in our_events]
+        assert len(set(start_dates)) == len(our_events), (
+            f"Each occurrence should have a unique start_datetime, got: {start_dates}"
+        )
+
+        # No start_datetime should fall outside the queried range
+        for e in our_events:
+            event_start = datetime.fromisoformat(e["start_datetime"])
+            # Remove timezone info for comparison if present
+            if event_start.tzinfo is not None:
+                event_start = event_start.replace(tzinfo=None)
+            assert event_start >= query_start - timedelta(hours=1), (
+                f"Occurrence {e['start_datetime']} is before query start {query_start}"
+            )
+            assert event_start < query_end + timedelta(hours=1), (
+                f"Occurrence {e['start_datetime']} is after query end {query_end}"
+            )
+
+        # Expanded occurrences should NOT have recurrence rules
+        # (server strips RRULE when expanding)
+        for e in our_events:
+            assert not e.get("recurring"), (
+                "Expanded occurrence should not have recurring=True, "
+                "RRULE should be stripped by server-side expansion"
+            )
+
+        logger.info(
+            f"Recurring event expansion works: {len(our_events)} occurrences "
+            f"returned with unique start dates"
+        )
+
+    finally:
+        if event_uid:
+            try:
+                await nc_client.calendar.delete_event(calendar_name, event_uid)
+            except Exception as e:
+                logger.warning(f"Cleanup failed for recurring event {event_uid}: {e}")
 
 
 async def test_calendar_operations_error_handling(

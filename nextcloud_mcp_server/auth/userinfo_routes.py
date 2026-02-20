@@ -13,14 +13,17 @@ import traceback
 from pathlib import Path
 from typing import Any
 
-import httpx
+from httpx import BasicAuth
 from jinja2 import Environment, FileSystemLoader
 from starlette.authentication import requires
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 
+from nextcloud_mcp_server.auth.permissions import is_nextcloud_admin
 from nextcloud_mcp_server.client import NextcloudClient
 from nextcloud_mcp_server.config import get_settings
+
+from ..http import nextcloud_httpx_client
 
 logger = logging.getLogger(__name__)
 
@@ -54,8 +57,6 @@ async def _get_authenticated_client_for_userinfo(request: Request) -> NextcloudC
 
         if not all([nextcloud_host, username, password]):
             raise RuntimeError("BasicAuth credentials not configured")
-
-        from httpx import BasicAuth
 
         assert nextcloud_host is not None
         assert username is not None
@@ -128,7 +129,9 @@ async def _get_processing_status(request: Request) -> dict[str, Any] | None:
         # Get Qdrant client and query indexed count
         indexed_count = 0
         try:
-            from nextcloud_mcp_server.vector.qdrant_client import get_qdrant_client
+            from nextcloud_mcp_server.vector.qdrant_client import (  # noqa: PLC0415
+                get_qdrant_client,
+            )
 
             qdrant_client = await get_qdrant_client()
 
@@ -257,7 +260,7 @@ async def _get_userinfo_endpoint(oauth_ctx: dict[str, Any]) -> str | None:
         return None
 
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with nextcloud_httpx_client(timeout=10.0) as client:
             response = await client.get(discovery_url)
             response.raise_for_status()
             discovery = response.json()
@@ -290,7 +293,7 @@ async def _query_idp_userinfo(
         User info dictionary from IdP, or None if query fails
     """
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with nextcloud_httpx_client(timeout=10.0) as client:
             response = await client.get(
                 userinfo_uri,
                 headers={"Authorization": f"Bearer {access_token_str}"},
@@ -430,8 +433,6 @@ async def user_info_html(request: Request) -> HTMLResponse:
     # Check if user is admin (for Webhooks tab)
     is_admin = False
     try:
-        from nextcloud_mcp_server.auth.permissions import is_nextcloud_admin
-
         # Get authenticated Nextcloud client
         nc_client = await _get_authenticated_client_for_userinfo(request)
         is_admin = await is_nextcloud_admin(request, nc_client._client)
@@ -470,8 +471,6 @@ async def user_info_html(request: Request) -> HTMLResponse:
     # Get Nextcloud host for generating links to apps (used by viz tab)
     # Use public issuer URL if available (for browser-accessible links),
     # otherwise fall back to NEXTCLOUD_HOST from settings
-    from nextcloud_mcp_server.config import get_settings
-
     settings = get_settings()
     nextcloud_host_for_links = (
         os.getenv("NEXTCLOUD_PUBLIC_ISSUER_URL") or settings.nextcloud_host

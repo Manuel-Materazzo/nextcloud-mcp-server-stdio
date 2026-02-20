@@ -1,5 +1,10 @@
 """Integration tests for Astrolabe personal settings page buttons.
 
+Cross-system interface test: Tests the MCP server's integration with the
+Astrolabe Nextcloud app, which is installed from the Nextcloud app store via
+app-hooks/post-installation/20-install-astrolabe-app.sh. Astrolabe source
+lives in a separate repository (https://github.com/cbcoutinho/astrolabe).
+
 Tests the button functionality on /settings/user/astrolabe:
 1. Disable Indexing button (POST to /apps/astrolabe/api/revoke)
 2. Disconnect button (POST to /apps/astrolabe/oauth/disconnect)

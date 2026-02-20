@@ -25,6 +25,8 @@ import jwt
 from nextcloud_mcp_server.auth.storage import RefreshTokenStorage
 from nextcloud_mcp_server.auth.token_exchange import exchange_token_for_delegation
 
+from ..http import nextcloud_httpx_client
+
 logger = logging.getLogger(__name__)
 
 
@@ -136,7 +138,7 @@ class TokenBrokerService:
     async def _get_http_client(self) -> httpx.AsyncClient:
         """Get or create HTTP client."""
         if self._http_client is None:
-            self._http_client = httpx.AsyncClient(
+            self._http_client = nextcloud_httpx_client(
                 timeout=httpx.Timeout(30.0), follow_redirects=True
             )
         return self._http_client

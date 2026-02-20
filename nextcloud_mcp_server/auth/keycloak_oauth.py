@@ -18,6 +18,8 @@ from urllib.parse import urlencode, urlparse
 
 import httpx
 
+from ..http import nextcloud_httpx_client
+
 logger = logging.getLogger(__name__)
 
 
@@ -107,7 +109,7 @@ class KeycloakOAuthClient:
     async def _get_http_client(self) -> httpx.AsyncClient:
         """Get or create HTTP client"""
         if self._http_client is None:
-            self._http_client = httpx.AsyncClient(timeout=30.0)
+            self._http_client = nextcloud_httpx_client(timeout=30.0)
         return self._http_client
 
     async def close(self) -> None:

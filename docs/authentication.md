@@ -223,6 +223,10 @@ NEXTCLOUD_OIDC_CLIENT_SECRET=<client-secret>
 | Token Storage | None | Refresh tokens only | All tokens |
 | Deployment Complexity | Low | Medium | High |
 
+### Astrolabe User Setup (Hybrid Mode)
+
+For Astrolabe-specific user setup instructions in hybrid mode, see the [Astrolabe documentation](https://github.com/cbcoutinho/astrolabe/blob/master/docs/user-setup-hybrid-mode.md).
+
 ### See Also
 - [OAuth Architecture](oauth-architecture.md) - Progressive Consent (Flow 2) details
 - [Configuration](configuration.md#enable_offline_access) - Hybrid mode configuration

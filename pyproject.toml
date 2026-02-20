@@ -1,6 +1,6 @@
 [project]
 name = "nextcloud-mcp-server"
-version = "0.61.3"
+version = "0.64.2"
 description = "Model Context Protocol (MCP) server for Nextcloud integration - enables AI assistants to interact with Nextcloud data"
 authors = [
     {name = "Chris Coutinho", email = "chris@coutinho.io"}
@@ -10,7 +10,7 @@ license = {text = "AGPL-3.0-only"}
 requires-python = ">=3.11"
 keywords = ["nextcloud", "mcp", "model-context-protocol", "llm", "ai", "claude", "webdav", "caldav", "carddav"]
 dependencies = [
-    "mcp[cli] (>=1.23,<1.24)",
+    "mcp[cli] (>=1.26,<1.27)",
     "httpx (>=0.28.1,<0.29.0)",
     "pillow (>=10.3.0,<12.0.0)", # Compatible with fastembed
     "icalendar (>=6.0.0,<7.0.0)",
@@ -98,23 +98,25 @@ version_files = [
 # Ignore tags from other components
 ignored_tag_formats = [
     "nextcloud-mcp-server-*",  # Helm chart tags
-    "astrolabe-v*",            # Astrolabe tags
 ]
 
-# Filter commits by scope (all scopes except helm and astrolabe)
+# Filter commits by scope (all scopes except helm)
 [tool.commitizen.customize]
-changelog_pattern = "^(feat|fix|docs|refactor|perf|test|build|ci|chore)(?!\\((?:helm|astrolabe)\\))(\\([^)]+\\))?(!)?:"
-schema_pattern = "^(feat|fix|docs|refactor|perf|test|build|ci|chore)(?!\\((?:helm|astrolabe)\\))(\\([^)]+\\))?(!)?:\\s.+"
+changelog_pattern = "^(feat|fix|docs|refactor|perf|test|build|ci|chore)(?!\\((?:helm)\\))(\\([^)]+\\))?(!)?:"
+schema_pattern = "^(feat|fix|docs|refactor|perf|test|build|ci|chore)(?!\\((?:helm)\\))(\\([^)]+\\))?(!)?:\\s.+"
 
 [tool.ruff.lint]
-extend-select = ["I"]
+extend-select = ["I", "PLC0415"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["PLC0415"]
 
 [tool.uv.sources]
 caldav = { git = "https://github.com/cbcoutinho/caldav", branch = "feature/httpx" }
 qdrant-client = { git = "https://github.com/cbcoutinho/qdrant-client", branch = "fix/fusion-score-threshold" }
 
 [build-system]
-requires = ["uv_build>=0.9.4,<0.10.0"]
+requires = ["uv_build>=0.10.0,<0.11.0"]
 build-backend = "uv_build"
 
 [tool.uv.build-backend]

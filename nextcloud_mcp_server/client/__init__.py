@@ -4,7 +4,6 @@ import os
 from httpx import (
     AsyncBaseTransport,
     AsyncClient,
-    AsyncHTTPTransport,
     Auth,
     BasicAuth,
     Request,
@@ -13,6 +12,7 @@ from httpx import (
 )
 
 from ..controllers.notes_search import NotesSearchController
+from ..http import nextcloud_httpx_transport
 from .calendar import CalendarClient
 from .contacts import ContactsClient
 from .cookbook import CookbookClient
@@ -67,7 +67,7 @@ class NextcloudClient:
         self._client = AsyncClient(
             base_url=base_url,
             auth=auth,
-            transport=AsyncDisableCookieTransport(AsyncHTTPTransport()),
+            transport=AsyncDisableCookieTransport(nextcloud_httpx_transport()),
             event_hooks={"request": [log_request], "response": [log_response]},
             timeout=Timeout(timeout=30, connect=5),
         )
@@ -113,7 +113,7 @@ class NextcloudClient:
         Returns:
             NextcloudClient configured with bearer token authentication
         """
-        from ..auth import BearerAuth
+        from ..auth import BearerAuth  # noqa: PLC0415
 
         logger.info(f"Creating NC Client for user '{username}' using OAuth token")
         return cls(base_url=base_url, username=username, auth=BearerAuth(token))
