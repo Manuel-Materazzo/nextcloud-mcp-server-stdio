@@ -34,8 +34,12 @@ from pathlib import Path
 from typing import Any, Optional
 
 import aiosqlite
+import anyio
+import httpx
+from anyio import to_thread
 from cryptography.fernet import Fernet
 
+from nextcloud_mcp_server.migrations import stamp_database, upgrade_database
 from nextcloud_mcp_server.observability.metrics import record_db_operation
 
 logger = logging.getLogger(__name__)
@@ -164,10 +168,6 @@ class RefreshTokenStorage:
 
         # Run migrations in a worker thread using anyio.to_thread
         # This allows Alembic to run its own async operations in a separate context
-        from anyio import to_thread
-
-        from nextcloud_mcp_server.migrations import stamp_database, upgrade_database
-
         if not has_alembic:
             if has_schema:
                 # Stamp existing database without running migrations
@@ -1427,8 +1427,6 @@ class RefreshTokenStorage:
         Returns:
             List of user IDs whose app passwords were removed
         """
-        import httpx
-
         if not self._initialized:
             await self.initialize()
 
@@ -1438,10 +1436,10 @@ class RefreshTokenStorage:
 
         removed: list[str] = []
 
-        for user_id in user_ids:
+        async def _validate_user(user_id: str) -> None:
             app_password = await self.get_app_password(user_id)
             if not app_password:
-                continue
+                return
 
             try:
                 async with httpx.AsyncClient(
@@ -1472,6 +1470,10 @@ class RefreshTokenStorage:
 
             except Exception as e:
                 logger.warning(f"Could not validate app password for {user_id}: {e}")
+
+        async with anyio.create_task_group() as tg:
+            for user_id in user_ids:
+                tg.start_soon(_validate_user, user_id)
 
         return removed
 

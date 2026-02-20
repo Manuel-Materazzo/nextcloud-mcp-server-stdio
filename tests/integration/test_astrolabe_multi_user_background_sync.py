@@ -834,6 +834,70 @@ async def verify_app_password_created(username: str) -> bool:
         return False
 
 
+def clear_stale_test_state(clear_preferences: bool = False) -> None:
+    """Clear stale app passwords, bruteforce entries, and optionally Astrolabe preferences."""
+    commands: list[tuple[list[str], str]] = [
+        (
+            [
+                "docker",
+                "compose",
+                "exec",
+                "-T",
+                "mcp-multi-user-basic",
+                "sqlite3",
+                "/app/data/tokens.db",
+                "DELETE FROM app_passwords;",
+            ],
+            "app passwords",
+        ),
+        (
+            [
+                "docker",
+                "compose",
+                "exec",
+                "-T",
+                "db",
+                "mariadb",
+                "-u",
+                "root",
+                "-ppassword",
+                "nextcloud",
+                "-e",
+                "DELETE FROM oc_bruteforce_attempts;",
+            ],
+            "bruteforce entries",
+        ),
+    ]
+    if clear_preferences:
+        commands.append(
+            (
+                [
+                    "docker",
+                    "compose",
+                    "exec",
+                    "-T",
+                    "db",
+                    "mariadb",
+                    "-u",
+                    "root",
+                    "-ppassword",
+                    "nextcloud",
+                    "-e",
+                    "DELETE FROM oc_preferences WHERE appid = 'astrolabe';",
+                ],
+                "Astrolabe preferences",
+            ),
+        )
+    for cmd, label in commands:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        if result.returncode != 0:
+            logger.warning(
+                f"Failed to clear {label} (rc={result.returncode}): {result.stderr}"
+            )
+        else:
+            logger.debug(f"Cleared {label}")
+
+
 @pytest.mark.integration
 @pytest.mark.oauth
 async def test_multi_user_astrolabe_background_sync_enablement(
@@ -863,40 +927,7 @@ async def test_multi_user_astrolabe_background_sync_enablement(
     """
     # Clear stale state from previous test runs
     logger.info("Clearing stale app passwords and bruteforce entries...")
-    subprocess.run(
-        [
-            "docker",
-            "compose",
-            "exec",
-            "-T",
-            "mcp-multi-user-basic",
-            "sqlite3",
-            "/app/data/tokens.db",
-            "DELETE FROM app_passwords;",
-        ],
-        capture_output=True,
-        text=True,
-        timeout=10,
-    )
-    subprocess.run(
-        [
-            "docker",
-            "compose",
-            "exec",
-            "-T",
-            "db",
-            "mariadb",
-            "-u",
-            "root",
-            "-ppassword",
-            "nextcloud",
-            "-e",
-            "DELETE FROM oc_bruteforce_attempts;",
-        ],
-        capture_output=True,
-        text=True,
-        timeout=10,
-    )
+    clear_stale_test_state()
 
     # Configure Astrolabe to point to the mcp-multi-user-basic server
     logger.info("Configuring Astrolabe for mcp-multi-user-basic server...")
@@ -1239,59 +1270,7 @@ async def test_revoke_background_sync_access(
     logger.info(
         "Clearing stale app passwords, bruteforce entries, and Astrolabe preferences..."
     )
-    subprocess.run(
-        [
-            "docker",
-            "compose",
-            "exec",
-            "-T",
-            "mcp-multi-user-basic",
-            "sqlite3",
-            "/app/data/tokens.db",
-            "DELETE FROM app_passwords;",
-        ],
-        capture_output=True,
-        text=True,
-        timeout=10,
-    )
-    subprocess.run(
-        [
-            "docker",
-            "compose",
-            "exec",
-            "-T",
-            "db",
-            "mariadb",
-            "-u",
-            "root",
-            "-ppassword",
-            "nextcloud",
-            "-e",
-            "DELETE FROM oc_bruteforce_attempts;",
-        ],
-        capture_output=True,
-        text=True,
-        timeout=10,
-    )
-    subprocess.run(
-        [
-            "docker",
-            "compose",
-            "exec",
-            "-T",
-            "db",
-            "mariadb",
-            "-u",
-            "root",
-            "-ppassword",
-            "nextcloud",
-            "-e",
-            "DELETE FROM oc_preferences WHERE appid = 'astrolabe';",
-        ],
-        capture_output=True,
-        text=True,
-        timeout=10,
-    )
+    clear_stale_test_state(clear_preferences=True)
 
     # Configure Astrolabe to point to the mcp-multi-user-basic server
     logger.info("Configuring Astrolabe for mcp-multi-user-basic server...")

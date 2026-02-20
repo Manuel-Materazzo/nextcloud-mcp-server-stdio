@@ -33,12 +33,13 @@ from anyio.streams.memory import (
 )
 from httpx import BasicAuth, HTTPStatusError
 
+from nextcloud_mcp_server.auth.storage import RefreshTokenStorage
 from nextcloud_mcp_server.client import NextcloudClient
 from nextcloud_mcp_server.config import get_settings
+from nextcloud_mcp_server.vector.processor import process_document
 from nextcloud_mcp_server.vector.scanner import DocumentTask, scan_user_documents
 
 if TYPE_CHECKING:
-    from nextcloud_mcp_server.auth.storage import RefreshTokenStorage
     from nextcloud_mcp_server.auth.token_broker import TokenBrokerService
 
 logger = logging.getLogger(__name__)
@@ -89,8 +90,6 @@ async def get_user_client_basic_auth(
     Raises:
         NotProvisionedError: If user has not provisioned an app password
     """
-    from nextcloud_mcp_server.auth.storage import RefreshTokenStorage
-
     # Get or create storage instance
     if storage is None:
         storage = RefreshTokenStorage.from_env()
@@ -237,6 +236,11 @@ async def user_scanner_task(
             f"[{mode_label}] User {user_id} not provisioned, not starting scan loop"
         )
         return
+    except Exception as e:
+        logger.warning(
+            f"[{mode_label}] Pre-validation failed for {user_id}: {e}. "
+            f"Proceeding to scan loop (has its own error handling)."
+        )
 
     consecutive_errors = 0
 
@@ -273,13 +277,16 @@ async def user_scanner_task(
                 )
                 break
             elif status_code == 429:
+                retry_after = min(int(e.response.headers.get("Retry-After", "60")), 300)
                 logger.warning(
                     f"[{mode_label}] Scanner rate-limited for {user_id}, "
-                    f"backing off 60s"
+                    f"backing off {retry_after}s"
                 )
                 try:
-                    with anyio.move_on_after(60):
+                    with anyio.move_on_after(retry_after):
                         await shutdown_event.wait()
+                # anyio.get_cancelled_exc_class() catches task cancellation
+                # (e.g. from task group teardown) so we exit cleanly.
                 except anyio.get_cancelled_exc_class():
                     break
                 continue
@@ -343,8 +350,6 @@ async def multi_user_processor_task(
         use_basic_auth: If True, use app passwords; if False, use OAuth tokens
         task_status: Status object for signaling task readiness
     """
-    from nextcloud_mcp_server.vector.processor import process_document
-
     mode_label = "BasicAuth" if use_basic_auth else "OAuth"
     logger.info(f"[{mode_label}] Processor {worker_id} started")
     task_status.started()
