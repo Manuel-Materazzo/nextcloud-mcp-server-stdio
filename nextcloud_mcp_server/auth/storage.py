@@ -34,8 +34,12 @@ from pathlib import Path
 from typing import Any, Optional
 
 import aiosqlite
+import anyio
+import httpx
+from anyio import to_thread
 from cryptography.fernet import Fernet
 
+from nextcloud_mcp_server.migrations import stamp_database, upgrade_database
 from nextcloud_mcp_server.observability.metrics import record_db_operation
 
 logger = logging.getLogger(__name__)
@@ -164,10 +168,6 @@ class RefreshTokenStorage:
 
         # Run migrations in a worker thread using anyio.to_thread
         # This allows Alembic to run its own async operations in a separate context
-        from anyio import to_thread
-
-        from nextcloud_mcp_server.migrations import stamp_database, upgrade_database
-
         if not has_alembic:
             if has_schema:
                 # Stamp existing database without running migrations
@@ -1413,6 +1413,69 @@ class RefreshTokenStorage:
         user_ids = [row[0] for row in rows]
         logger.debug(f"Found {len(user_ids)} users with app passwords")
         return user_ids
+
+    async def cleanup_invalid_app_passwords(self, nextcloud_host: str) -> list[str]:
+        """
+        Validate stored app passwords against Nextcloud and remove invalid ones.
+
+        Makes a lightweight OCS request for each stored user to check if credentials
+        are still valid. Removes entries that return 401/403.
+
+        Args:
+            nextcloud_host: Nextcloud base URL
+
+        Returns:
+            List of user IDs whose app passwords were removed
+        """
+        if not self._initialized:
+            await self.initialize()
+
+        user_ids = await self.get_all_app_password_user_ids()
+        if not user_ids:
+            return []
+
+        removed: list[str] = []
+
+        async def _validate_user(user_id: str) -> None:
+            app_password = await self.get_app_password(user_id)
+            if not app_password:
+                return
+
+            try:
+                async with httpx.AsyncClient(
+                    base_url=nextcloud_host,
+                    auth=httpx.BasicAuth(user_id, app_password),
+                    timeout=10.0,
+                ) as client:
+                    response = await client.get(
+                        "/ocs/v2.php/cloud/user",
+                        headers={
+                            "OCS-APIRequest": "true",
+                            "Accept": "application/json",
+                        },
+                    )
+
+                if response.status_code in (401, 403):
+                    logger.info(
+                        f"App password for {user_id} is invalid "
+                        f"(HTTP {response.status_code}), removing"
+                    )
+                    await self.delete_app_password(user_id)
+                    removed.append(user_id)
+                else:
+                    logger.debug(
+                        f"App password for {user_id} validated "
+                        f"(HTTP {response.status_code})"
+                    )
+
+            except Exception as e:
+                logger.warning(f"Could not validate app password for {user_id}: {e}")
+
+        async with anyio.create_task_group() as tg:
+            for user_id in user_ids:
+                tg.start_soon(_validate_user, user_id)
+
+        return removed
 
 
 async def generate_encryption_key() -> str:

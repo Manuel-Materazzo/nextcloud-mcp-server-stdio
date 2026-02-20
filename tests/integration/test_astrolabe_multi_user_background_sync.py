@@ -834,6 +834,70 @@ async def verify_app_password_created(username: str) -> bool:
         return False
 
 
+def clear_stale_test_state(clear_preferences: bool = False) -> None:
+    """Clear stale app passwords, bruteforce entries, and optionally Astrolabe preferences."""
+    commands: list[tuple[list[str], str]] = [
+        (
+            [
+                "docker",
+                "compose",
+                "exec",
+                "-T",
+                "mcp-multi-user-basic",
+                "sqlite3",
+                "/app/data/tokens.db",
+                "DELETE FROM app_passwords;",
+            ],
+            "app passwords",
+        ),
+        (
+            [
+                "docker",
+                "compose",
+                "exec",
+                "-T",
+                "db",
+                "mariadb",
+                "-u",
+                "root",
+                "-ppassword",
+                "nextcloud",
+                "-e",
+                "DELETE FROM oc_bruteforce_attempts;",
+            ],
+            "bruteforce entries",
+        ),
+    ]
+    if clear_preferences:
+        commands.append(
+            (
+                [
+                    "docker",
+                    "compose",
+                    "exec",
+                    "-T",
+                    "db",
+                    "mariadb",
+                    "-u",
+                    "root",
+                    "-ppassword",
+                    "nextcloud",
+                    "-e",
+                    "DELETE FROM oc_preferences WHERE appid = 'astrolabe';",
+                ],
+                "Astrolabe preferences",
+            ),
+        )
+    for cmd, label in commands:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        if result.returncode != 0:
+            logger.warning(
+                f"Failed to clear {label} (rc={result.returncode}): {result.stderr}"
+            )
+        else:
+            logger.debug(f"Cleared {label}")
+
+
 @pytest.mark.integration
 @pytest.mark.oauth
 async def test_multi_user_astrolabe_background_sync_enablement(
@@ -861,6 +925,10 @@ async def test_multi_user_astrolabe_background_sync_enablement(
     This tests ADR-002 Tier 2 authentication: User-specific app passwords for background operations
     in multi-user BasicAuth deployments.
     """
+    # Clear stale state from previous test runs
+    logger.info("Clearing stale app passwords and bruteforce entries...")
+    clear_stale_test_state()
+
     # Configure Astrolabe to point to the mcp-multi-user-basic server
     logger.info("Configuring Astrolabe for mcp-multi-user-basic server...")
     await configure_astrolabe_for_mcp_server(
@@ -1198,6 +1266,12 @@ async def test_revoke_background_sync_access(
     This tests the fix for the issue where POST requests to the revoke endpoint
     were returning errors due to HTTP method mismatch (was DELETE, now POST).
     """
+    # Clear stale state from previous test runs
+    logger.info(
+        "Clearing stale app passwords, bruteforce entries, and Astrolabe preferences..."
+    )
+    clear_stale_test_state(clear_preferences=True)
+
     # Configure Astrolabe to point to the mcp-multi-user-basic server
     logger.info("Configuring Astrolabe for mcp-multi-user-basic server...")
     await configure_astrolabe_for_mcp_server(
@@ -1218,9 +1292,14 @@ async def test_revoke_background_sync_access(
         # Step 1: Login to Nextcloud
         await login_to_nextcloud(page, username, password)
 
-        # Step 2: Generate app password and enable background sync
-        app_password = await generate_app_password(page, username)
-        await enable_background_sync_via_app_password(page, username, app_password)
+        # Step 2: Complete full authorization (OAuth Step 1 + App Password Step 2)
+        auth_result = await complete_astrolabe_authorization(page, username, password)
+        assert auth_result["step1"], (
+            f"OAuth authorization (Step 1) failed for {username}"
+        )
+        assert auth_result["step2"], (
+            f"App password setup (Step 2) failed for {username}"
+        )
 
         # Step 3: Verify background sync is enabled
         assert await verify_app_password_created(username), (
